@@ -1,0 +1,4 @@
+.env
+dist/
+default.log
+node_modules/

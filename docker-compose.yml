@@ -1,0 +1,36 @@
+version: '3'
+
+services:
+
+  server:
+    image: node:18-alpine
+    volumes:
+      - .:/app
+    command: sh -c "cd /app && yarn install && yarn tsc && node dist/server"
+    ports:
+      - 3434:3434
+    healthcheck:
+      test: rm -fr ping && wget server:3434/ping
+      interval: 1s
+      timeout: 2s
+      retries: 60
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ./src/worker
+    volumes:
+      - .:/app
+    command: sh -c "cd /app && node dist/worker"
+    depends_on:
+      server:
+        condition: service_healthy
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
