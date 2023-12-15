@@ -47,7 +47,7 @@ docker compose up --scale worker=2
 Server can accept this request in order to process an AI move calculation through workers:
 
 ```
-POST http://0.0.0.0:3434/calculate-move
+POST http://0.0.0.0:8088/calculate-move
 Content-Type: application/json
 
 {

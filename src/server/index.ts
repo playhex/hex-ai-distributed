@@ -27,7 +27,7 @@ server.on('connection', socket => {
     socket.on('close', () => hexJobDistributer.removePeer(peer));
 });
 
-server.listen(3435);
+server.listen(8089);
 
 const api = express();
 
@@ -45,4 +45,4 @@ api.get('/ping', (req, res) => res.send('pong'));
 
 mountBullUI(api, '/bull', [hexJobDistributer.getQueue()]);
 
-api.listen(3434);
+api.listen(8088);

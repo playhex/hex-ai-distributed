@@ -49,6 +49,7 @@ const connectAndProcess = () => {
             }
 
             if (Object.keys(config).length > 0) {
+                logger.debug('Sending configuration', config);
                 socket.write('config ' + JSON.stringify(config));
             }
         })
@@ -64,9 +65,13 @@ const connectAndProcess = () => {
             const [, token, jobDataJson] = matches;
             const jobData: HexJobData = JSON.parse(jobDataJson);
 
+            logger.debug('Received a job. Processing it...');
+
             const result = await processJob(jobData);
 
             socket.write(`job_result ${token} ${JSON.stringify(result)}`);
+
+            logger.info('Job processed successfully.');
         })
 
         .on('error', error => {

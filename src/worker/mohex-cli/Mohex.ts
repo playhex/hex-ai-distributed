@@ -120,7 +120,7 @@ export default class Mohex
             });
         });
 
-        console.log('SEND COMMAND', rawCommand);
+        //logger.debug('SEND COMMAND', rawCommand);
 
         this.process.stdin.write(rawCommand + '\n');
 

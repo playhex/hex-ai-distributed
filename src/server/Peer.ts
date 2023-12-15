@@ -22,7 +22,7 @@ export class Peer
 
     setConfig(config: PeerConfig): void
     {
-        logger.info('peer update its config', config);
+        logger.debug('peer update its config', config);
 
         this.config = {
             ...this.config,

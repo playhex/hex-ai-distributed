@@ -1,3 +1,4 @@
+import logger from '../../shared/logger';
 import Mohex from './Mohex';
 import QueueableMohex from './QueueableMohex';
 
@@ -31,7 +32,7 @@ queueableMohex.queueCommand(async (mohex) => {
         allow_swap: false,
     });
 }).then(() => {
-    console.log('mohex preconfigured.');
+    logger.info('Mohex started and configured');
 });
 
 export default queueableMohex;

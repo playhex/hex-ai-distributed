@@ -7,7 +7,7 @@
   "version": "1.0.0",
   "description": "Hex AI distributed. Send move calculation to peers.",
   "author": "Julien Maulny",
-  "license": "AGPL-v3",
+  "license": "AGPL-3.0",
   "dependencies": {
     "@bull-board/express": "^5.10.2",
     "bullmq": "^4.15.2",
