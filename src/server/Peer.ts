@@ -1,5 +1,5 @@
 import { Socket } from 'node:net';
-import { HexJobData, HexJobResult, PeerConfig, defaultConfig } from '../shared';
+import { HexJobData, HexJobResult } from '../shared';
 import logger from '../shared/logger';
 
 export class Peer
@@ -9,27 +9,42 @@ export class Peer
      */
     private locked: boolean = false;
 
-    private config: PeerConfig = defaultConfig;
+    /**
+     * Benchmark result.
+     * A peer with high power will be selected first to process a task.
+     */
+    private power: number = 1;
+
+    /**
+     * If true, this peer will never be selected,
+     * unless all connected peers are secondary.
+     *
+     * Used for slow peers, or peer sharing the same machine as the hex website.
+     */
+    private secondary = false;
 
     constructor(
         private socket: Socket,
     ) {}
 
-    getConfig(): PeerConfig
+    getPower(): number
     {
-        return this.config;
+        return this.power;
     }
 
-    setConfig(config: PeerConfig): void
+    setPower(power: number): void
     {
-        logger.debug('peer update its config', config);
+        this.power = power;
+    }
 
-        this.config = {
-            ...this.config,
-            ...config,
-        };
+    getSecondary(): boolean
+    {
+        return this.secondary;
+    }
 
-        logger.info('peer config has been updated', this.config);
+    setSecondary(secondary: boolean): void
+    {
+        this.secondary = secondary;
     }
 
     isLocked(): boolean

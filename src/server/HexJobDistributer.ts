@@ -75,6 +75,11 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
         this.startProcessing();
     }
 
+    getPeers(): Peer[]
+    {
+        return this.peers;
+    }
+
     addPeer(peer: Peer): void
     {
         this.peers.push(peer);
@@ -105,7 +110,7 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
      */
     async acquirePeer(): Promise<Peer>
     {
-        let peers = this.peers.filter(peer => !peer.getConfig().secondary);
+        let peers = this.peers.filter(peer => !peer.getSecondary());
 
         if (0 === peers.length) {
             peers = this.peers;
@@ -120,7 +125,7 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
         }
 
         const bestPeer = peers.reduce(
-            (bestPeer, peer) => peer.getConfig().power > bestPeer.getConfig().power
+            (bestPeer, peer) => peer.getPower() > bestPeer.getPower()
                 ? peer
                 : bestPeer
             ,
@@ -164,7 +169,7 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
                 try {
                     const result = await peer.processJob(job.data);
 
-                    logger.debug('peer finished job, result: ' + result);
+                    logger.debug('peer finished job, result: ' + JSON.stringify(result));
 
                     await job.moveToCompleted(result, TOKEN, false);
                     logger.info('Job completed');
@@ -187,3 +192,5 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
         return await job.waitUntilFinished(this.queueEvents);
     }
 }
+
+export const hexJobDistributer = new HexJobDistributer();

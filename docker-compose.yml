@@ -6,9 +6,10 @@ services:
     image: node:18-alpine
     volumes:
       - .:/app
-    command: sh -c "cd /app && yarn install && yarn tsc && node dist/server"
+    command: sh -c "cd /app && yarn server"
     ports:
       - 8088:8088
+      - 8089:8089
     healthcheck:
       test: rm -fr ping && wget server:8088/ping
       interval: 1s
@@ -22,7 +23,7 @@ services:
     build: ./src/worker
     volumes:
       - .:/app
-    command: sh -c "cd /app && node dist/worker"
+    command: sh -c "cd /app && yarn worker"
 
   redis:
     image: redis:7

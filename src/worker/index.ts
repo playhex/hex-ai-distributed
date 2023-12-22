@@ -1,6 +1,6 @@
 import './config';
-import { createConnection, Socket } from 'node:net';
-import { HexJobData, HexJobResult, PeerConfig } from '../shared';
+import { createConnection } from 'node:net';
+import { HexJobData } from '../shared';
 import queueableMohex from './mohex-cli/queueableMohexInstance';
 import logger from '../shared/logger';
 
@@ -10,7 +10,7 @@ if (!SERVER_HOST || !SERVER_PORT) {
     throw new Error('Needs SERVER_HOST and SERVER_PORT in .env file');
 }
 
-const processJob = async (jobData: HexJobData): Promise<HexJobResult> => {
+const processJob = async (jobData: HexJobData): Promise<string> => {
     const { size, movesHistory, currentPlayer, swapRule } = jobData.game;
     const { engine, maxGames } = jobData.ai;
 
@@ -36,21 +36,17 @@ const connectAndProcess = () => {
         .on('connect', () => {
             logger.info('Connected. Processing jobs.');
 
-            const { PEER_CONFIG_POWER, PEER_CONFIG_SECONDARY } = process.env;
+            const { PEER_CONFIG_SECONDARY } = process.env;
 
-            const config: Partial<PeerConfig> = {};
-
-            if (undefined !== PEER_CONFIG_POWER) {
-                config.power = +PEER_CONFIG_POWER;
-            }
+            let secondary = false;
 
             if (undefined !== PEER_CONFIG_SECONDARY) {
-                config.secondary = '1' === PEER_CONFIG_SECONDARY || 'true' === PEER_CONFIG_SECONDARY;
+                secondary = '1' === PEER_CONFIG_SECONDARY || 'true' === PEER_CONFIG_SECONDARY;
             }
 
-            if (Object.keys(config).length > 0) {
-                logger.debug('Sending configuration', config);
-                socket.write('config ' + JSON.stringify(config));
+            if (secondary) {
+                logger.debug('Set secondary', { secondary });
+                socket.write('set_secondary ' + JSON.stringify(secondary));
             }
         })
 
@@ -67,9 +63,14 @@ const connectAndProcess = () => {
 
             logger.debug('Received a job. Processing it...');
 
-            const result = await processJob(jobData);
-
-            socket.write(`job_result ${token} ${JSON.stringify(result)}`);
+            try {
+                const result = await processJob(jobData);
+                socket.write(`job_result ${token} ${JSON.stringify({success: true, result})}`);
+            } catch (error) {
+                logger.error('Error while processing job by AI', { error });
+                socket.write(`job_result ${token} ${JSON.stringify({success: false, error})}`);
+                return;
+            }
 
             logger.info('Job processed successfully.');
         })
@@ -88,6 +89,11 @@ const connectAndProcess = () => {
     ;
 };
 
-logger.info('Connecting to server...');
+(async () => {
+    logger.info('Waiting for Mohex to be ready...');
+    await queueableMohex.queueCommand(async mohex => mohex.license());
+    logger.info('Mohex ready');
 
-connectAndProcess();
+    logger.info('Connecting to server...');
+    connectAndProcess();
+})();
