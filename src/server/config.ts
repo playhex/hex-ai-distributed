@@ -1,9 +1,9 @@
 import dotenv from 'dotenv';
 
 dotenv.config({
-    path: './src/server/.env.dist',
+    path: '.env.dist',
 });
 dotenv.config({
-    path: './src/server/.env',
+    path: '.env',
     override: true,
 });

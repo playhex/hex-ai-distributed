@@ -3,6 +3,7 @@ import { createConnection } from 'node:net';
 import { HexJobData } from '../shared';
 import queueableMohex from './mohex-cli/queueableMohexInstance';
 import logger from '../shared/logger';
+import { processJobMohex } from './ai-client/mohex';
 
 const { SERVER_HOST, SERVER_PORT } = process.env;
 
@@ -11,21 +12,13 @@ if (!SERVER_HOST || !SERVER_PORT) {
 }
 
 const processJob = async (jobData: HexJobData): Promise<string> => {
-    const { size, movesHistory, currentPlayer, swapRule } = jobData.game;
-    const { engine, maxGames } = jobData.ai;
+    const { engine } = jobData.ai;
 
-    if ('mohex' !== engine) {
-        throw new Error('Only supports mohex engine, got: ' + engine);
+    switch (engine) {
+        case 'mohex': return processJobMohex(jobData);
+
+        default: throw new Error(`AI engine "${engine}" not supported.`);
     }
-
-    return queueableMohex.queueCommand(async mohex => {
-        await mohex.setMohexParameters({ max_games: '' + maxGames });
-        await mohex.setGameParameters({ allow_swap: swapRule });
-        await mohex.setBoardSize(size);
-        await mohex.playGame(movesHistory);
-
-        return await mohex.generateMove(currentPlayer);
-    });
 }
 
 const connectAndProcess = () => {

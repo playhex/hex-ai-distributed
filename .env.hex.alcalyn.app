@@ -1,3 +1,7 @@
+#
+# WORKER
+#
+
 MOHEX_BIN=mohex
 
 SERVER_HOST=hex.alcalyn.app

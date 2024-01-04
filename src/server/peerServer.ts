@@ -40,6 +40,8 @@ const benchmarkPeer = async (peer: Peer): Promise<number> => {
 
 peerServer.on('connection', async socket => {
 
+    logger.debug('A socket connected to server');
+
     socket.on('data', data => {
         const string = data.toString();
 
@@ -55,7 +57,9 @@ peerServer.on('connection', async socket => {
     const peer = new Peer(socket);
 
     try {
+        logger.debug('Benchmarking this socket...');
         const benchmarkResult = await benchmarkPeer(peer);
+        logger.debug('Benchmarking done, power = ' + benchmarkResult);
 
         peer.setPower(benchmarkResult);
     } catch (e) {
