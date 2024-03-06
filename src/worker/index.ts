@@ -1,5 +1,6 @@
 import './config';
-import { createConnection } from 'node:net';
+import { createConnection, Socket } from 'node:net';
+import { setTimeout } from 'node:timers/promises';
 import { HexJobData } from '../shared';
 import queueableMohex from './mohex-cli/queueableMohexInstance';
 import logger from '../shared/logger';
@@ -21,13 +22,31 @@ const processJob = async (jobData: HexJobData): Promise<string> => {
     }
 }
 
+let socket: null | Socket = null;
+
 const connectAndProcess = () => {
-    const socket = createConnection({
+    logger.info('Creating connection to server...');
+
+    if (null !== socket) {
+        logger.notice('There is already a socket, stopping now to prevent creating another');
+        return;
+    }
+
+    socket = createConnection({
         host: SERVER_HOST,
         port: +SERVER_PORT,
-    })
+        keepAlive: true,
+        timeout: 5000, // Only used for connection timeout. Ignore timeouts if socket is connected.
+    });
+
+    socket
         .on('connect', () => {
             logger.info('Connected. Processing jobs.');
+
+            if (null === socket) {
+                logger.error('No socket, cannot configure');
+                return;
+            }
 
             const { PEER_CONFIG_SECONDARY } = process.env;
 
@@ -48,6 +67,12 @@ const connectAndProcess = () => {
             const matches = string.match(/^job ([^ ]+) (.+)$/);
 
             if (!matches) {
+                logger.warning('Received an unknwown command, ignore it', { command: string });
+                return;
+            }
+
+            if (null === socket) {
+                logger.error('No socket, cannot process data');
                 return;
             }
 
@@ -60,6 +85,7 @@ const connectAndProcess = () => {
                 const result = await processJob(jobData);
                 socket.write(`job_result ${token} ${JSON.stringify({success: true, result})}`);
             } catch (error) {
+                console.error('HERRE', error);
                 logger.error('Error while processing job by AI', { error });
                 socket.write(`job_result ${token} ${JSON.stringify({success: false, error})}`);
                 return;
@@ -70,14 +96,42 @@ const connectAndProcess = () => {
 
         .on('error', error => {
             logger.error('Error... Closing connection', { error });
+
+            if (null === socket) {
+                return;
+            }
+
             socket.end();
+            socket.destroy();
+            socket = null;
         })
 
         .on('close', async () => {
             logger.notice('Connection to server closed, trying to reconnect...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            if (null !== socket) {
+                socket.destroy();
+                socket = null;
+            }
+
+            await setTimeout(2000);
             connectAndProcess();
-            socket.destroy();
+        })
+
+        .on('timeout', async () => {
+            if (null !== socket) {
+                if (!socket.connecting) {
+                    return;
+                }
+
+                socket.destroy();
+                socket = null;
+            }
+
+            logger.notice('Timeout while connecting to server, trying to reconnect...');
+
+            await setTimeout(2000);
+            connectAndProcess();
         })
     ;
 };

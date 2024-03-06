@@ -6,7 +6,6 @@ API that process Hex move by sending move calculation to peers.
 
 ```
 yarn install
-yarn tsc --watch
 ```
 
 ## Run
@@ -33,12 +32,24 @@ node dist/worker
 ## With docker
 
 ``` bash
-cp src/server/.env.docker src/server/.env
-cp src/worker/.env.docker src/worker/.env
+cp .env.docker .env
 
 docker compose up
+```
 
-# or test with multiple workers
+- To run only server or worker:
+
+``` bash
+# only server
+docker compose up redis server
+
+# only worker
+docker compose up worker
+```
+
+- To test with multiple workers:
+
+``` bash
 docker compose up --scale worker=2
 ```
 
@@ -70,21 +81,42 @@ Result:
 f7
 ```
 
-## Architecture
+See all the possible HTTP requests in this postman collection:
 
-Starts two servers on different ports:
+<https://www.postman.com/alcalyn/workspace/hex/collection/32226212-905e39fc-27b0-4792-9634-88a2dba2de5c>
+
+## Other usages
+
+If you just want to use preinstalled Hex AI engines in docker using command line,
+you can run and enter in the worker container with:
+
+``` bash
+docker compose run worker bash
+
+# then you can use AI engines
+mohex genmove black
+```
+
+output:
+
+```
+MoHex 2.0.CMake Dec 14 2023
+Copyright (C) 2007-2012 by the authors of the Benzene project.
+...
+```
+
+## Architecture
 
 - Rest API server (express)
 
-Can request an API move (or later game analysis).
+Can request an API move, or game analysis.
 This will send the job to the next fastest available peer.
 
-Can be internal or requiring API key to prevent anyone abusing it / spamming.
+Should be internal, or requires API key to prevent anyone abusing or spamming it.
 
 - TCP server for peers (NodeJs.net)
 
 Allow to a peer client to connect and accept jobs.
 While connected, peer will receive jobs, and have to send result back.
-Job are sent one by one, or maybe queuing max two to prevent waiting back/forth between result and new job ?
 
 Should be public to allow anyone contributing, still with personal api key to block peer sending invalid data.

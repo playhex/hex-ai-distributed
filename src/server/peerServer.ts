@@ -5,7 +5,10 @@ import { HexJobData } from '../shared';
 import logger from '../shared/logger';
 import typia from 'typia';
 
-const peerServer = createServer();
+const peerServer = createServer({
+    keepAlive: true,
+    allowHalfOpen: false,
+});
 
 const benchmarkJob: HexJobData = {
     game: {

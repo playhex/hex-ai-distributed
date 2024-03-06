@@ -50,6 +50,8 @@ export default class Mohex
             args.push('--seed', '' + this.seed);
         }
 
+        logger.info(`Spawn process from ${this.pathToBinary}...`);
+
         this.process = spawn(this.pathToBinary, args);
 
         this.process.stderr.on('data', (data: Buffer) => {
