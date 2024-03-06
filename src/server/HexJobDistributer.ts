@@ -40,8 +40,10 @@ const queueOptions: QueueOptions = {
 const workerOptions: WorkerOptions = {
     connection,
     maxStalledCount: 3,
-    stalledInterval: 10000,
-    lockDuration: 20000,
+
+    // Following values are tripled because katahex take more time
+    stalledInterval: 30_000,
+    lockDuration: 60_000,
 };
 
 interface PeerListEvents

@@ -3,7 +3,7 @@ version: '3'
 services:
 
   server:
-    image: node:18-alpine
+    image: node:21-alpine
     volumes:
       - .:/app
     command: sh -c "cd /app && yarn server"

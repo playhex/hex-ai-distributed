@@ -1,15 +1,26 @@
-FROM node:21-slim
+# Alpine version of docker image, size is less than 1 Go, instead of 2 Go with non-alpine.
+# Mohex works, but I get segfault with katahex, with genmove command. Reproduce:
+# add "privileged: true" to worker container in docker compose
+# docker compose run worker sh
+# echo '/tmp/core.%t.%e.%p' | sudo tee /proc/sys/kernel/core_pattern
+# katahex gtp -config /app/katahex/config.cfg -model /app/katahex/katahex_model_20220618.bin.gz
+# genmove b
+# genmove w
+# segfault is here, get stask trace with: apk add gdb && gdb /bin/katahex /tmp/core...
+# bt
 
-RUN apt update && apt install -y \
-    libboost-all-dev \
-    build-essential \
+FROM node:21-alpine
+
+RUN apk update && apk add --no-cache \
+    alpine-sdk \
+    boost-dev \
     cmake \
     git
 
 # Mohex
 
-RUN apt install -y \
-    libdb-dev
+RUN apk add --no-cache \
+    db-dev
 
 # Download Mohex source code
 # Go back to an older version, I get a strange AI behaviour on latest version.
@@ -26,8 +37,8 @@ RUN cd /tmp \
 
 # Katahex
 
-RUN apt install -y \
-    libeigen3-dev \
+RUN apk add --no-cache \
+    eigen-dev \
     libzip-dev
 
 # Katahex selinger

@@ -1,7 +1,16 @@
 import { HexJobData } from '../../shared';
 import logger from '../../shared/logger';
 import Move from '../Move';
-import queueableMohex from '../mohex-cli/queueableMohexInstance';
+import { mirrorColor, mirrorMove, removeSwap } from '../mirrorMoves';
+import Mohex from '../mohex-cli/Mohex';
+
+const { MOHEX_BIN } = process.env;
+
+if (!MOHEX_BIN) {
+    throw new Error('Requires MOHEX_BIN=... in .env file');
+}
+
+export const mohex = new Mohex(MOHEX_BIN);
 
 /**
  * Mohex "swap-pieces" is actually a swap sides. Black stone stays, but players change color.
@@ -25,71 +34,56 @@ showboard
  *
  * So we have to adapt moves here.
  *
- * - I play c2, mohex swaps, I play d2, generate move:
- *      c2 swap d2 => W b3, B d2 => play-game d2 b3, genmove white (shift first move, play-game, play white first move)
- *
- * - I play c2, mohex swaps, I play d2, mohex play a1, I play a2, generate move:
- *      c2 swap d2 a1 a2 => W b3, B d2, W a1, B a2 => play-game d2 b3 a1 a2, genmove white (shift first move, play-game, play white first move)
- *
- * - Mohex plays c2, I swap, generate move:
- *      c2 swap => W b3 => play white b3, genmove black (shift first move, play-game, play white first move)
- *
- * - Mohex plays c2, I swap, Mohex plays d3, I play a1, generate move:
- *      c2 swap d3 a1 => W b3, B d3, W a1 => play-game d3 a1, play white b3, genmove black (shift first move, play-game, play white first move)
- *
- * So strategy is:
- *  - If swap move
- *      shift first move and mirror it
- *      remove swap-pieces
- *      play-game
- *      then play first move as always white
- *      genmove current player
+ * If there is a swap piece move, drop it, mirror first move, and invert colors.
  */
 export const processJobMohex = async (jobData: HexJobData): Promise<string> => {
-    const { size, currentPlayer } = jobData.game;
-    let { movesHistory, swapRule } = jobData.game;
+    const { size } = jobData.game;
+    let { movesHistory, swapRule, currentPlayer } = jobData.game;
 
     if (!jobData.ai) {
         throw new Error('This job is not for an ai');
     }
 
-    const { engine, maxGames } = jobData.ai;
+    const { engine } = jobData.ai;
 
     if ('mohex' !== engine) {
         throw new Error('Only supports mohex engine, got: ' + engine);
     }
 
-    let playFinallyAsWhite: null | string = null;
+    const { maxGames } = jobData.ai;
+    const { mirrored, swapped, moves } = removeSwap(movesHistory);
 
-    if (swapRule && movesHistory.includes('swap-pieces')) {
-        const moves = movesHistory.split(' ');
+    logger.debug(`Mohex received job:\nparam_mohex max_games ${maxGames}\nparam_game allow_swap ${swapRule ? '1' : '0'}\nboardsize ${size}\nplay-game ${movesHistory}\ngenmove ${currentPlayer}\nshowboard`);
 
-        playFinallyAsWhite = Move.fromString(moves.shift() as string).cloneMirror().toString(); // shift swaped move and mirror it
-        moves.shift(); // remove swap-pieces
+    await mohex.setMohexParameters({
+        // do not keep calculated moves because plays multiple games in parallel
+        reuse_subtree: false,
 
-        swapRule = false; // disallow swap to prevent mohex swap again, as we removed swap move
+        // timeout, must not stop calculations to keep consistent AI difficulty
+        max_time: '30',
 
-        movesHistory = moves.join(' ');
-    }
+        // limit memory
+        max_memory: '' + (1024 * 1024 * 1024), // 1Go
 
-    return queueableMohex.queueCommand(async mohex => {
-        logger.debug(`Received job:\nparam_mohex max_games ${maxGames}\nparam_game allow_swap ${swapRule ? '1' : '0'}\nboardsize ${size}\nplay-game ${movesHistory}\ngenmove ${currentPlayer}\nshowboard`);
-
-        await mohex.setMohexParameters({ max_games: '' + maxGames });
-        await mohex.setGameParameters({ allow_swap: swapRule });
-        await mohex.setBoardSize(size);
-        await mohex.playGame(movesHistory);
-
-        if (null !== playFinallyAsWhite) {
-            await mohex.play('white', playFinallyAsWhite);
-        }
-
-        logger.debug(await mohex.showboard());
-
-        const generatedMove = await mohex.generateMove(currentPlayer);
-
-        logger.debug('generated move: ' + generatedMove);
-
-        return generatedMove;
+        max_games: '' + maxGames,
     });
+
+    await mohex.setGameParameters({
+        allow_swap: swapped ? false : swapRule,
+    });
+
+    await mohex.setBoardSize(size);
+    await mohex.playGame(moves);
+
+    logger.debug('mirrored: ' + mirrored);
+    logger.debug(await mohex.showboard());
+
+    let generatedMove = await mohex.generateMove(mirrored ? mirrorColor(currentPlayer) : currentPlayer);
+
+    if (mirrored) {
+        generatedMove = mirrorMove(generatedMove);
+    }
+    logger.debug('generated move: ' + generatedMove);
+
+    return generatedMove;
 };

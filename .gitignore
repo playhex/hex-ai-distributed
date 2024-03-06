@@ -3,3 +3,5 @@ dist/
 default.log
 node_modules/
 yarn-error.log
+/katahex/*.bin.gz
+/gtp_logs

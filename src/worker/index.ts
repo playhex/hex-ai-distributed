@@ -2,9 +2,9 @@ import './config';
 import { createConnection, Socket } from 'node:net';
 import { setTimeout } from 'node:timers/promises';
 import { HexJobData } from '../shared';
-import queueableMohex from './mohex-cli/queueableMohexInstance';
 import logger from '../shared/logger';
-import { processJobMohex } from './ai-client/mohex';
+import { mohex, processJobMohex } from './ai-client/mohex';
+import { katahex, processJobKatahex } from './ai-client/katahex';
 
 const { SERVER_HOST, SERVER_PORT } = process.env;
 
@@ -17,6 +17,7 @@ const processJob = async (jobData: HexJobData): Promise<string> => {
 
     switch (engine) {
         case 'mohex': return processJobMohex(jobData);
+        case 'katahex': return processJobKatahex(jobData);
 
         default: throw new Error(`AI engine "${engine}" not supported.`);
     }
@@ -25,7 +26,7 @@ const processJob = async (jobData: HexJobData): Promise<string> => {
 let socket: null | Socket = null;
 
 const connectAndProcess = () => {
-    logger.info('Creating connection to server...');
+    logger.info(`Creating connection to server ${SERVER_HOST}:${SERVER_PORT}...`);
 
     if (null !== socket) {
         logger.notice('There is already a socket, stopping now to prevent creating another');
@@ -85,8 +86,15 @@ const connectAndProcess = () => {
                 const result = await processJob(jobData);
                 socket.write(`job_result ${token} ${JSON.stringify({success: true, result})}`);
             } catch (error) {
-                console.error('HERRE', error);
-                logger.error('Error while processing job by AI', { error });
+                if (error instanceof Error) {
+                    logger.error('Error while processing job by AI', {
+                        name: error.name,
+                        msg: error.message,
+                        stack: error.stack,
+                    });
+                } else {
+                    console.error(error);
+                }
                 socket.write(`job_result ${token} ${JSON.stringify({success: false, error})}`);
                 return;
             }
@@ -138,8 +146,12 @@ const connectAndProcess = () => {
 
 (async () => {
     logger.info('Waiting for Mohex to be ready...');
-    await queueableMohex.queueCommand(async mohex => mohex.license());
+    logger.info(await mohex.version());
     logger.info('Mohex ready');
+
+    logger.info('Waiting for Katahex to be ready...');
+    logger.info(await katahex.version());
+    logger.info('Katahex ready');
 
     logger.info('Connecting to server...');
     connectAndProcess();

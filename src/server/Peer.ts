@@ -47,6 +47,16 @@ export class Peer
         this.secondary = secondary;
     }
 
+    isPrimary(): boolean
+    {
+        return !this.secondary;
+    }
+
+    isSecondary(): boolean
+    {
+        return this.secondary;
+    }
+
     isLocked(): boolean
     {
         return this.locked;

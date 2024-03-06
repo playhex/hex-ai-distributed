@@ -38,11 +38,11 @@ api.get('/status', (req, res) => {
 
     res.send({
         totalPeers: peers.length,
-        totalPeersPrimary: peers.filter(peer => !peer.getSecondary()).length,
-        totalPeersSecondary: peers.filter(peer => peer.getSecondary()).length,
+        totalPeersPrimary: peers.filter(peer => peer.isPrimary()).length,
+        totalPeersSecondary: peers.filter(peer => peer.isSecondary()).length,
         peers: peers.map(peer => ({
             power: peer.getPower(),
-            secondary: peer.getSecondary(),
+            secondary: peer.isSecondary(),
             locked: peer.isLocked(),
         })),
     });
