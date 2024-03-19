@@ -20,6 +20,7 @@ services:
         condition: service_healthy
 
   worker:
+    image: alcalyn/hex-distributed-ai-worker:latest
     build: ./src/worker
     volumes:
       - .:/app
