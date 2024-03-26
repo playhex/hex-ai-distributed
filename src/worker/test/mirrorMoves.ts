@@ -1,4 +1,4 @@
-import { removeSwap, toKatahexPosition } from '../mirrorMoves';
+import { removeSwap, rawMovesFromHistory, toKatahexPosition } from '../mirrorMoves';
 import assert from 'assert';
 
 describe('mirrorMoves', () => {
@@ -88,6 +88,52 @@ describe('mirrorMoves', () => {
                     mirrored: true,
                 }),
                 'white b1 black c2 white d3',
+            );
+        });
+    });
+
+    describe('splitMoves', () => {
+        it('split moves', () => {
+            assert.deepStrictEqual(
+                rawMovesFromHistory('a1 b2 c3 d4'),
+                {
+                    black: ['a1', 'c3'],
+                    white: ['b2', 'd4'],
+                }
+            );
+
+            assert.deepStrictEqual(
+                rawMovesFromHistory('a1 b2 c3 d4 e5'),
+                {
+                    black: ['a1', 'c3', 'e5'],
+                    white: ['b2', 'd4'],
+                }
+            );
+        });
+
+        it('split moves, mirror and remove swap', () => {
+            assert.deepStrictEqual(
+                rawMovesFromHistory('a2 swap-pieces'),
+                {
+                    black: [],
+                    white: ['b1'],
+                }
+            );
+
+            assert.deepStrictEqual(
+                rawMovesFromHistory('a2 swap-pieces c4'),
+                {
+                    black: ['c4'],
+                    white: ['b1'],
+                }
+            );
+
+            assert.deepStrictEqual(
+                rawMovesFromHistory('b1 swap-pieces c4 d5 e6 f7'),
+                {
+                    black: ['c4', 'e6'],
+                    white: ['a2', 'd5', 'f7'],
+                }
             );
         });
     });

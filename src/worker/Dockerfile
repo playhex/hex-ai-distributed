@@ -37,6 +37,6 @@ RUN cd /tmp \
     && cd katahex/ \
     && mkdir build \
     && cd build \
-    && cmake -DUSE_BACKEND=EIGEN -DMAX_BOARD_LEN=19 ../cpp \
+    && cmake -DUSE_BACKEND=EIGEN -DMAX_BOARD_LEN=32 ../cpp \
     && make -j4 \
     && mv ./katahex /bin/katahex

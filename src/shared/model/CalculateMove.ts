@@ -1,6 +1,6 @@
 import { tags } from 'typia';
 
-type MohexAIData = {
+export type CalculateMoveAIMohex = {
     engine: 'mohex';
 
     /**
@@ -9,9 +9,9 @@ type MohexAIData = {
     maxGames: number
         & tags.Minimum<1>
     ;
-}
+};
 
-type KatahexAIData = {
+export type CalculateMoveAIKatahex = {
     engine: 'katahex';
 
     /**
@@ -19,31 +19,27 @@ type KatahexAIData = {
      * or only use raw neural network output (easier).
      */
     treeSearch: boolean;
-}
+};
 
-export type HexJobData = {
+export type CalculateMoveInput = {
     game: {
         size: number
             & tags.Minimum<1>
-            & tags.Maximum<19>
+            & tags.Maximum<32>
         ;
 
+        /**
+         * All played move.
+         * Will calculate next move.
+         */
         movesHistory: string;
+
         currentPlayer: 'black' | 'white';
+
         swapRule: boolean;
     };
 
-    ai: MohexAIData | KatahexAIData;
-}
-
-export type HexJobResult = HexJobSuccess | HexJobError;
-
-export type HexJobSuccess = {
-    success: true;
-    result: string;
+    ai: CalculateMoveAIMohex | CalculateMoveAIKatahex;
 };
 
-export type HexJobError = {
-    success: false;
-    error: string;
-};
+export type CalculateMoveOutput = string | 'resign';

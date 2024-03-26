@@ -1,23 +1,57 @@
-import express, { json } from 'express';
+import express, { Response, json } from 'express';
 import logger from '../shared/logger';
 import mountBullUI from './bullUI';
-import { hexJobDistributer } from './HexJobDistributer';
 import typia, { TypeGuardError } from "typia";
-import { HexJobData } from '../shared';
+import { addAnalyzeToQueue, analyzesQueue } from '../shared/queue/analyze';
+import { addWorkerTaskToQueue, workerTasksQueue } from '../shared/queue/workerTasks';
+import { CalculateMoveInput } from '../shared/model/CalculateMove';
+import { AnalyzeGameInput } from '../shared/model/AnalyzeGame';
 
 const api = express();
 
+api.get('/ping', (req, res) => {
+    res.send('pong');
+});
 
 api.post('/calculate-move', json(), async (req, res) => {
     try {
-        const hexJobData = typia.assert<HexJobData>(req.body);
-        logger.info('move requested, queued to distributer');
+        logger.info('move requested, queuing to distributer');
 
-        const result = await hexJobDistributer.processJob(hexJobData);
+        const result = await addWorkerTaskToQueue({
+            type: 'calculate-move',
+            data: typia.assert<CalculateMoveInput>(req.body),
+        });
+
         logger.info('distributer processed move, sending to client the result:', result);
 
         if (result.success) {
-            res.send(result.result);
+            res.send(result.data);
+        } else {
+            res.status(400).send(result.error);
+        }
+    } catch (e) {
+        if (!(e instanceof TypeGuardError)) {
+            logger.error('Error while /calculate-move', e);
+            res.status(400).send(e);
+            return;
+        }
+
+        logger.warning('error while validating request body input', e);
+        res.status(400).send(e.message);
+    }
+});
+
+api.post('/analyze-game', json(), async (req, res) => {
+    try {
+        const analyzeGameInput = typia.assert<AnalyzeGameInput>(req.body);
+        logger.info('review requested, queuing to distributer');
+        logger.debug(`review data: size: ${analyzeGameInput.size} movesHistory: ${analyzeGameInput.movesHistory}`);
+
+        const result = await addAnalyzeToQueue(analyzeGameInput);
+        logger.info('distributer processed move, sending to client the result:', result);
+
+        if (result.success) {
+            res.send(result.data);
         } else {
             res.status(400).send(result.error);
         }
@@ -33,21 +67,25 @@ api.post('/calculate-move', json(), async (req, res) => {
     }
 });
 
-api.get('/status', (req, res) => {
-    const peers = hexJobDistributer.getPeers();
+const { PEER_SERVER_API_HOST, PEER_SERVER_API_PORT } = process.env;
 
-    res.send({
-        totalPeers: peers.length,
-        totalPeersPrimary: peers.filter(peer => peer.isPrimary()).length,
-        totalPeersSecondary: peers.filter(peer => peer.isSecondary()).length,
-        peers: peers.map(peer => ({
-            power: peer.getPower(),
-            secondary: peer.isSecondary(),
-            locked: peer.isLocked(),
-        })),
-    });
+if (!PEER_SERVER_API_HOST || !PEER_SERVER_API_PORT) {
+    throw new Error('PEER_SERVER_API_HOST and PEER_SERVER_API_PORT must be set in .env');
+}
+
+api.get('/status', async (req, res) => {
+    const peerStatusEndpoint = `http://${PEER_SERVER_API_HOST}:${PEER_SERVER_API_PORT}/status`;
+
+    logger.debug(`GET ${peerStatusEndpoint}...`);
+
+    const response = await fetch(peerStatusEndpoint);
+
+    res.send(await response.json());
 });
 
-mountBullUI(api, '/bull', [hexJobDistributer.getQueue()]);
+mountBullUI(api, '/bull', [
+    workerTasksQueue,
+    analyzesQueue,
+]);
 
 export default api;

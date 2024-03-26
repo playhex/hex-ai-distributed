@@ -11,7 +11,7 @@ const mountBullUI = (app: Express, path: string, queues: Queue[]) => {
 
     createBullBoard({
         queues: queues.map(queue => new BullMQAdapter(queue)),
-        serverAdapter: serverAdapter,
+        serverAdapter,
     });
 
     app.use(path, serverAdapter.getRouter());

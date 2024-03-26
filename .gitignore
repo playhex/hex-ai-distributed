@@ -5,3 +5,4 @@ node_modules/
 yarn-error.log
 /katahex/*.bin.gz
 /gtp_logs
+src/shared/typia-generated/

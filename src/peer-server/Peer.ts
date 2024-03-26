@@ -1,6 +1,7 @@
 import { Socket } from 'node:net';
-import { HexJobData, HexJobResult } from '../shared';
 import logger from '../shared/logger';
+import typia from 'typia';
+import { WorkerTaskJobInput, WorkerTaskJobOutput } from '../shared/model/WorkerTask';
 
 export class Peer
 {
@@ -82,26 +83,31 @@ export class Peer
         this.locked = false;
     }
 
-    async processJob(jobData: HexJobData): Promise<HexJobResult>
+    async sendJob(jobData: WorkerTaskJobInput): Promise<WorkerTaskJobOutput>
     {
         return new Promise((resolve, reject) => {
             const token = Math.floor(Math.random() * 1E12);
 
             const onClose = () => {
                 logger.notice('Socket closed while processing, reject job result promise');
-                reject('Socket closed, reject job result promise');
+                reject(new Error('Socket closed, reject job result promise'));
             };
 
             const onData = (data: Buffer) => {
                 const string = data.toString();
+                logger.debug(`Data received from worker: ${string}`);
 
                 if (string.startsWith(`job_result ${token} `)) {
                     this.socket.off('close', onClose);
                     this.socket.off('data', onData);
 
-                    resolve(JSON.parse(string.substring(`job_result ${token} `.length)));
+                    const peerResult = typia.assert<WorkerTaskJobOutput>(JSON.parse(string.substring(`job_result ${token} `.length)));
+
+                    resolve(peerResult);
                 }
             };
+
+            logger.debug(`Send to peer: job ${token} ${JSON.stringify(jobData)}`);
 
             this.socket
                 .on('close', onClose)

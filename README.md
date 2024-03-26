@@ -37,6 +37,8 @@ cp .env.docker .env
 docker compose up
 ```
 
+- Access bull UI: <http://0.0.0.0:8088/bull>
+
 - To run only server or worker:
 
 ``` bash
@@ -51,6 +53,12 @@ docker compose up worker
 
 ``` bash
 docker compose up --scale worker=2
+```
+
+- To empty all redis queues
+
+``` bash
+docker compose run server sh -c "cd /app && yarn obliterate"
 ```
 
 ## API
@@ -151,3 +159,53 @@ Allow to a peer client to connect and accept jobs.
 While connected, peer will receive jobs, and have to send result back.
 
 Should be public to allow anyone contributing, still with personal api key to block peer sending invalid data.
+
+## Build worker standalone docker image
+
+To run a worker from an image with all inside (source code and katahex model),
+
+- check there is a model in `./katahex/` folder, and is the one configured in `.env`
+
+- then run:
+
+``` bash
+# build
+docker build -f src/worker/Dockerfile.standalone -t alcalyn/hex-distributed-ai-worker:standalone .
+
+# publish
+docker push alcalyn/hex-distributed-ai-worker:standalone
+```
+
+## Start a worker
+
+Pull or update worker:
+
+``` bash
+docker pull alcalyn/hex-distributed-ai-worker:standalone
+```
+
+- start a worker with:
+
+``` bash
+docker run -it alcalyn/hex-distributed-ai-worker:standalone
+
+# (ctrl + C to stop it)
+```
+
+- start it in background:
+
+``` bash
+docker run -d --name hex-worker alcalyn/hex-distributed-ai-worker:standalone
+
+# and stop it with:
+docker rm -f hex-worker
+
+# or show logs with:
+docker logs -ft hex-worker
+```
+
+- run and enter in the container without running a worker:
+
+``` bash
+docker run -it alcalyn/hex-distributed-ai-worker:standalone bash
+```

@@ -1,76 +1,28 @@
-import Redis from 'ioredis';
-import { Job, Queue, QueueEvents, QueueOptions, Worker, WorkerOptions } from 'bullmq';
-import { HexJobData, HexJobResult } from '../shared';
+import { Job } from 'bullmq';
 import { TypedEmitter } from 'tiny-typed-emitter';
 import { Peer } from './Peer';
 import logger from '../shared/logger';
-
-const { REDIS_URL } = process.env;
-
-if (!REDIS_URL) {
-    throw new Error('Cannot start, requires REDIS_URL=redis://...');
-}
-
-logger.debug('Connection to redis ' + REDIS_URL);
-
-const connection = new Redis(REDIS_URL, {
-    maxRetriesPerRequest: null,
-});
-
-logger.info('Connected to redis ' + REDIS_URL);
-
-const TOKEN = 'HexJobDistributer';
-const QUEUE_NAME = 'hex_jobs';
-
-const queueOptions: QueueOptions = {
-    connection,
-    defaultJobOptions: {
-        attempts: 10,
-        removeOnComplete: {
-            age: 24 * 3600,
-            count: 1000,
-        },
-        removeOnFail: {
-            age: 24 * 3600,
-            count: 1000,
-        },
-    },
-};
-
-const workerOptions: WorkerOptions = {
-    connection,
-    maxStalledCount: 3,
-
-    // Following values are tripled because katahex take more time
-    stalledInterval: 30_000,
-    lockDuration: 60_000,
-};
+import { createWorkerTasksWorker, workerTasksQueueEvents } from '../shared/queue/workerTasks';
+import { WorkerTaskJobInput, WorkerTaskJobOutput } from '../shared/model/WorkerTask';
+import { createAnalyzeWorker } from '../shared/queue/analyze';
 
 interface PeerListEvents
 {
     peerAvailable: (peer: Peer) => void;
 }
 
+const TOKEN = 'HexJobDistributerKey';
+
 export class HexJobDistributer extends TypedEmitter<PeerListEvents>
 {
     private peers: Peer[] = [];
 
-    private queue = new Queue<HexJobData, HexJobResult>(QUEUE_NAME, queueOptions);
-    private queueEvents = new QueueEvents(QUEUE_NAME, { connection });
-
-    private worker: Worker;
+    private worker = createWorkerTasksWorker();
+    private analyzesConsolidationWorker = createAnalyzeWorker();
 
     constructor()
     {
         super();
-
-        // As soon as API has been offline, all previous move requests have been cancelled.
-        // So no need to keep previous move jobs in queue.
-        this.queue.obliterate({
-            force: true,
-        });
-
-        this.worker = new Worker(QUEUE_NAME, null, workerOptions);
 
         this.worker.startStalledCheckTimer();
 
@@ -138,24 +90,19 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
         return bestPeer;
     }
 
-    getQueue()
-    {
-        return this.queue;
-    }
-
     private async startProcessing(): Promise<void>
     {
         logger.info('Distributer starts processing');
 
         while (true) {
-            let job: undefined | Job = undefined;
+            let job: undefined | Job<WorkerTaskJobInput, WorkerTaskJobOutput> = undefined;
 
             while (!job) {
                 job = await this.worker.getNextJob(TOKEN);
 
                 if (!job) {
                     logger.debug('no job, wait for new event...');
-                    await new Promise(resolve => this.queueEvents.once('waiting', resolve));
+                    await new Promise(resolve => workerTasksQueueEvents.once('waiting', resolve));
                 }
             }
 
@@ -169,7 +116,7 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
 
             (async () => {
                 try {
-                    const result = await peer.processJob(job.data);
+                    const result = await peer.sendJob(job.data);
 
                     logger.debug('peer finished job, result: ' + JSON.stringify(result));
 
@@ -188,10 +135,9 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
         }
     }
 
-    async processJob(jobData: HexJobData): Promise<HexJobResult> {
-        const job = await this.queue.add('move', jobData);
-
-        return await job.waitUntilFinished(this.queueEvents);
+    getAnalyzeConsolidationWorker()
+    {
+        return this.analyzesConsolidationWorker;
     }
 }
 

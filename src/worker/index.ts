@@ -1,26 +1,18 @@
-import './config';
+import '../../config';
 import { createConnection, Socket } from 'node:net';
 import { setTimeout } from 'node:timers/promises';
-import { HexJobData } from '../shared';
 import logger from '../shared/logger';
-import { mohex, processJobMohex } from './ai-client/mohex';
-import { katahex, processJobKatahex } from './ai-client/katahex';
+import { katahex } from './task/calculate-move/katahex';
+import typia from 'typia';
+import { WorkerTaskJobInput, WorkerTaskJobOutput } from '../shared/model/WorkerTask';
+import { aiProcessJob } from './task/calculate-move';
+import { analyzeMove } from './task/analyze-move';
+import { mohex } from './task/calculate-move/mohex';
 
 const { SERVER_HOST, SERVER_PORT } = process.env;
 
 if (!SERVER_HOST || !SERVER_PORT) {
     throw new Error('Needs SERVER_HOST and SERVER_PORT in .env file');
-}
-
-const processJob = async (jobData: HexJobData): Promise<string> => {
-    const { engine } = jobData.ai;
-
-    switch (engine) {
-        case 'mohex': return processJobMohex(jobData);
-        case 'katahex': return processJobKatahex(jobData);
-
-        default: throw new Error(`AI engine "${engine}" not supported.`);
-    }
 }
 
 let socket: null | Socket = null;
@@ -65,6 +57,7 @@ const connectAndProcess = () => {
 
         .on('data', async data => {
             const string = data.toString();
+            logger.debug(`Data received: ${string}`);
             const matches = string.match(/^job ([^ ]+) (.+)$/);
 
             if (!matches) {
@@ -78,28 +71,47 @@ const connectAndProcess = () => {
             }
 
             const [, token, jobDataJson] = matches;
-            const jobData: HexJobData = JSON.parse(jobDataJson);
+            const task: WorkerTaskJobInput = typia.assert<WorkerTaskJobInput>(JSON.parse(jobDataJson));
+            let output: WorkerTaskJobOutput;
 
-            logger.debug('Received a job. Processing it...');
+            logger.debug('Received a job. Processing it...', { type: task.type });
 
             try {
-                const result = await processJob(jobData);
-                socket.write(`job_result ${token} ${JSON.stringify({success: true, result})}`);
-            } catch (error) {
-                if (error instanceof Error) {
-                    logger.error('Error while processing job by AI', {
-                        name: error.name,
-                        msg: error.message,
-                        stack: error.stack,
-                    });
-                } else {
-                    console.error(error);
+                switch (task.type) {
+                    case 'calculate-move':
+                        output = {
+                            success: true,
+                            data: await aiProcessJob(task.data),
+                        };
+                        break;
+
+                    case 'analyze-move':
+                        output = {
+                            success: true,
+                            data: await analyzeMove(task.data),
+                        };
+                        break;
                 }
-                socket.write(`job_result ${token} ${JSON.stringify({success: false, error})}`);
-                return;
+
+                logger.info('Job processed successfully, sending back to peer server.');
+            } catch (error) {
+                if (!(error instanceof Error)) {
+                    throw error;
+                }
+
+                logger.error('Error while processing job by AI', {
+                    name: error.name,
+                    msg: error.message,
+                    stack: error.stack,
+                });
+
+                output = {
+                    success: false,
+                    error: error.message,
+                };
             }
 
-            logger.info('Job processed successfully.');
+            socket.write(`job_result ${token} ${JSON.stringify(output)}`);
         })
 
         .on('error', error => {

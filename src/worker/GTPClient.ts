@@ -2,6 +2,8 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import PQueue from 'p-queue';
 import logger from '../shared/logger';
 
+class GTPClientError extends Error {}
+
 const paramStr = (parameter: string | number | boolean): string => {
     if ('boolean' === typeof parameter) {
         return parameter ? '1' : '0';
@@ -82,7 +84,7 @@ export default class GTPClient<Command extends string = string>
                 if ('=' === result[0]) {
                     resolve(result.substring(1).trim());
                 } else {
-                    reject(result);
+                    reject(new GTPClientError(result));
                 }
             };
 

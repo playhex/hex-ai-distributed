@@ -1,8 +1,7 @@
-import { HexJobData } from '../../shared';
-import logger from '../../shared/logger';
-import Move from '../Move';
-import Katahex from '../katahex-cli/Katahex';
-import { mirrorAllMoves, mirrorMove, removeSwap, toKatahexPosition } from '../mirrorMoves';
+import logger from '../../../shared/logger';
+import { CalculateMoveInput } from '../../../shared/model/CalculateMove';
+import Katahex from '../../katahex-cli/Katahex';
+import { mirrorMove, removeSwap, toKatahexPosition } from '../../mirrorMoves';
 
 const { KATAHEX_BIN } = process.env;
 
@@ -12,7 +11,7 @@ if (!KATAHEX_BIN) {
 
 export const katahex = new Katahex(KATAHEX_BIN);
 
-export const processJobKatahex = async (jobData: HexJobData): Promise<string> => {
+export const processJobKatahex = async (jobData: CalculateMoveInput): Promise<string> => {
     const { size } = jobData.game;
     let { movesHistory, swapRule, currentPlayer } = jobData.game;
 

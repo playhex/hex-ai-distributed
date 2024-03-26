@@ -9,9 +9,24 @@ services:
     command: sh -c "cd /app && yarn server"
     ports:
       - 8088:8088
-      - 8089:8089
     healthcheck:
       test: rm -fr ping && wget server:8088/ping
+      interval: 1s
+      timeout: 2s
+      retries: 60
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  peer-server:
+    image: node:21-alpine
+    volumes:
+      - .:/app
+    command: sh -c "cd /app && yarn peer-server"
+    ports:
+      - 8089:8089
+    healthcheck:
+      test: rm -fr ping && wget peer-server:8090/ping
       interval: 1s
       timeout: 2s
       retries: 60

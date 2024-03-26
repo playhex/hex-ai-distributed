@@ -1,7 +1,12 @@
 import logger from '../../shared/logger';
+import { takeKataRawNBestMoves } from '../../shared/utils';
 import GTPClient from '../GTPClient';
-import { mirrorMove } from '../mirrorMoves';
 import { KatahexCommand } from './types';
+
+export type RawNNOutput = {
+    values: number[][];
+    whiteWin: number;
+};
 
 export default class Katahex
 {
@@ -112,16 +117,21 @@ export default class Katahex
     }
 
     /**
-     * Only use raw neural network output to get best move from its intuition.
-     * Don't make any tree searching.
+     * Read neural network output, parse it,
+     * and returns values as number[][].
      */
-    async getBestMoveFromNeuralNetworkOutput(symmetry: number = 0): Promise<string>
+    async parseRawNn(symmetry: number = 0): Promise<RawNNOutput>
     {
         const output = await this.sendCommand('kata-raw-nn', symmetry);
         const lines = output.split('\n');
+        const globalValues: { [key: string]: number } = {};
 
         while (lines.length > 0 && lines[0] !== 'policy') {
-            lines.shift();
+            const globalValue = lines.shift()?.split(' ');
+
+            if (globalValue && 2 === globalValue.length) {
+                globalValues[globalValue[0]] = parseFloat(globalValue[1]);
+            }
         }
 
         while (lines.length > 0 && !lines[lines.length - 1].startsWith('policyPass')) {
@@ -135,25 +145,20 @@ export default class Katahex
         lines.shift();
         lines.pop();
 
-        const values = lines.map(line => line.trim().split(/ +/).map(v => parseFloat(v)));
-        let bestMove: null | { move: Move, value: number } = null;
+        return {
+            values: lines.map(line => line.trim().split(/ +/).map(v => parseFloat(v))),
+            whiteWin: globalValues['whiteWin'],
+        };
+    }
 
-        for (let row = 0; row < values.length; ++row) {
-            for (let col = 0; col < values[row].length; ++col) {
-                const value = values[row][col];
-
-                if (isNaN(value)) {
-                    continue;
-                }
-
-                if (null === bestMove || value > bestMove.value) {
-                    bestMove = {
-                        move: new Move(row, col),
-                        value,
-                    };
-                }
-            }
-        }
+    /**
+     * Only use raw neural network output to get best move from its intuition.
+     * Don't make any tree searching.
+     */
+    async getBestMoveFromNeuralNetworkOutput(symmetry: number = 0): Promise<string>
+    {
+        const rawNNOutput = await this.parseRawNn(symmetry);
+        const bestMove = takeKataRawNBestMoves(rawNNOutput.values, 1).pop() ?? null;
 
         if (null === bestMove) {
             throw new Error('Did not found best move');
@@ -168,35 +173,5 @@ export default class Katahex
             await this.sendCommand('name'),
             await this.sendCommand('version'),
         ].join(' ');
-    }
-}
-
-
-class Move
-{
-    constructor(
-        public row: number,
-        public col: number,
-    ) {}
-
-    static rowToNumber(row: number): string
-    {
-        return String(row + 1);
-    }
-
-    static colToLetter(col: number): string
-    {
-        /** letter(4) => "e" */
-        const letter = (n: number): string => String.fromCharCode(97 + n);
-
-        return col < 26
-            ? letter(col)
-            : letter(Math.floor(col / 26) - 1) + letter(col % 26)
-        ;
-    }
-
-    toString(): string
-    {
-        return Move.colToLetter(this.col) + Move.rowToNumber(this.row);
     }
 }

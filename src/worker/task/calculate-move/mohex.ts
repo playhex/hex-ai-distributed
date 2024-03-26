@@ -1,8 +1,7 @@
-import { HexJobData } from '../../shared';
-import logger from '../../shared/logger';
-import Move from '../Move';
-import { mirrorColor, mirrorMove, removeSwap } from '../mirrorMoves';
-import Mohex from '../mohex-cli/Mohex';
+import logger from '../../../shared/logger';
+import { CalculateMoveInput } from '../../../shared/model/CalculateMove';
+import { mirrorColor, mirrorMove, removeSwap } from '../../mirrorMoves';
+import Mohex from '../../mohex-cli/Mohex';
 
 const { MOHEX_BIN } = process.env;
 
@@ -36,8 +35,13 @@ showboard
  *
  * If there is a swap piece move, drop it, mirror first move, and invert colors.
  */
-export const processJobMohex = async (jobData: HexJobData): Promise<string> => {
+export const processJobMohex = async (jobData: CalculateMoveInput): Promise<string> => {
     const { size } = jobData.game;
+
+    if (size < 1 || size > 13) {
+        throw new Error('Mohex can play only on board with size in [1, 13]');
+    }
+
     let { movesHistory, swapRule, currentPlayer } = jobData.game;
 
     if (!jobData.ai) {
@@ -73,7 +77,13 @@ export const processJobMohex = async (jobData: HexJobData): Promise<string> => {
     });
 
     await mohex.setBoardSize(size);
-    await mohex.playGame(moves);
+
+    try {
+        await mohex.playGame(moves);
+    } catch (e) {
+        logger.notice('Error while replaying game', { moves });
+        throw e;
+    }
 
     logger.debug('mirrored: ' + mirrored);
     logger.debug(await mohex.showboard());

@@ -1,0 +1,19 @@
+# See README for build and publish instructions
+
+FROM alcalyn/hex-distributed-ai-worker
+
+WORKDIR /app/
+
+COPY katahex katahex
+
+# Changing above will force re-download katahex model on pull/update
+
+COPY src src
+COPY node_modules node_modules
+COPY .env* config.ts obliterate.ts README.md package.json tsconfig.json yarn.lock .
+
+RUN yarn tsc && \
+    cat .env.docker .env.playhex.org > dist/.env && \
+    rm -fr src yarn.lock /usr/local/share/.cache /usr/share/doc
+
+CMD node ./dist/src/worker
