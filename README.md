@@ -209,3 +209,43 @@ docker logs -ft hex-worker
 ``` bash
 docker run -it alcalyn/hex-distributed-ai-worker:standalone bash
 ```
+
+## Simulate stale connection between peer and server
+
+Peer keep a long running tcp connection to peer-server.
+
+There is chance that peer lose connection without having time to gracefully
+closing the connection
+(wifi down, unpluged, laptop closed without exiting worker).
+
+This makes the connection stale, peer-server think the worker is available
+but is not, and when sending him a job, he lose time before re-sending job to another peer.
+
+This should be handled, peer-server must keep connections alive, and disconnect stale peers.
+
+For developments, to simulate losing connection, with docker:
+
+``` bash
+# get network name (the name is this project folder name by default)
+docker network ls
+
+# get worker container id (the name is something like alcalyn/hex-distributed-ai-worker:latest)
+docker ps
+
+# disconnect
+docker network disconnect hex-ai-distributed_default ead82e1f53e8
+```
+
+Then check how long the server take to remove this peer:
+
+`GET /status`
+
+Or send him a task, and check how long it takes to re-attribute the job to another available peer.
+
+For this, you can run 2 workers with `docker compose up --scale worker=2`.
+
+To restart the test, you need to reconnect worker to the network:
+
+``` bash
+docker network connect hex-ai-distributed_default ead82e1f53e8
+```

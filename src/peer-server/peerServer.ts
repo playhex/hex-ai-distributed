@@ -6,6 +6,7 @@ import { benchmarkPeer } from './peer-benchmark';
 
 const peerServer = createServer({
     keepAlive: true,
+    keepAliveInitialDelay: 1000,
     allowHalfOpen: false,
 });
 
@@ -42,6 +43,16 @@ peerServer.on('connection', async socket => {
     hexJobDistributer.addPeer(peer);
 
     socket.on('close', () => hexJobDistributer.removePeer(peer));
+
+    socket.on('timeout', () => {
+        logger.notice('Lost connection with a peer (keep alive). Removing it.');
+        hexJobDistributer.removePeer(peer);
+    });
+
+    socket.on('error', e => {
+        logger.notice('Error with a peer socket. Removing it.', { errorMessage: e.message, errorName: e.name });
+        hexJobDistributer.removePeer(peer);
+    });
 });
 
 export default peerServer;

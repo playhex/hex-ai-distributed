@@ -29,6 +29,7 @@ const connectAndProcess = () => {
         host: SERVER_HOST,
         port: +SERVER_PORT,
         keepAlive: true,
+        keepAliveInitialDelay: 1000,
         timeout: 5000, // Only used for connection timeout. Ignore timeouts if socket is connected.
     });
 
