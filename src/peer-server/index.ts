@@ -1,4 +1,5 @@
 import '../../config';
+import './monitor';
 import api from './api';
 import peerServer from './peerServer';
 

@@ -9,6 +9,8 @@ import { createAnalyzeWorker } from '../shared/queue/analyze';
 interface PeerListEvents
 {
     peerAvailable: (peer: Peer) => void;
+    peerConnected: (peer: Peer) => void;
+    peerDisconnected: (peer: Peer) => void;
 }
 
 const TOKEN = 'HexJobDistributerKey';
@@ -40,6 +42,7 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
 
         logger.info('Peer connected. Peers count: ' + this.peers.length);
 
+        this.emit('peerConnected', peer);
         this.emit('peerAvailable', peer);
     }
 
@@ -52,6 +55,8 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
         }
 
         this.peers.splice(index, 1);
+
+        this.emit('peerDisconnected', peer);
 
         logger.info('Peer disconnected. Peers count: ' + this.peers.length);
     }
