@@ -54,7 +54,7 @@ export const removeSwap = (movesHistory: string): MovesWithoutSwap => {
 
     let moves = movesHistory.split(' ');
 
-    if (!moves[1].match(/swap/)) {
+    if ('swap-pieces' !== moves[1]) {
         throw new Error('Unexpected swap-pieces not second move');
     }
 
@@ -126,7 +126,7 @@ export const rawMovesFromHistory = (movesHistory: string): RawMoves => {
         return rawMoves;
     }
 
-    if (secondMove.match(/swap/)) {
+    if ('swap-pieces' === secondMove) {
         rawMoves.white.push(mirrorMove(firstMove));
     } else {
         rawMoves.black.push(firstMove);

@@ -3,8 +3,9 @@ import connection from '../connection';
 import { WORKER_TASKS_QUEUE_NAME } from './workerTasks';
 import { AnalyzeGameInput, AnalyzeGameJobInput, AnalyzeGameJobOutput, AnalyzeGameOutput } from '../model/AnalyzeGame';
 import { WorkerTaskJobInput } from '../model/WorkerTask';
-import { AnalyzeMoveOutput } from '../model/AnalyzeMove';
+import { AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue } from '../model/AnalyzeMove';
 import { ResultType } from '../model/ResultType';
+import { mirrorMoveAndValues } from '../../worker/mirrorMoves';
 
 export const ANALYZES_QUEUE_NAME = 'analyzes';
 
@@ -29,6 +30,8 @@ export const reconsolidateMoves: Processor<AnalyzeGameJobInput, AnalyzeGameJobOu
 
         data[moveAnalyze.data.moveIndex] = moveAnalyze.data;
     }
+
+    addSwapMoveAnalyze(data);
 
     // Set whiteWin from next position to previous move
     for (let i = 0; i < data.length; ++i) {
@@ -56,6 +59,33 @@ export const reconsolidateMoves: Processor<AnalyzeGameJobInput, AnalyzeGameJobOu
     };
 };
 
+/**
+ * In case of a swap move, second move will be empty.
+ * Fill it with analyze from third move mirrored analyzis.
+ */
+export const addSwapMoveAnalyze = (data: AnalyzeGameOutput): void => {
+    if (null !== data[1] || undefined === data[2]) {
+        return;
+    }
+
+    const swapMove: MoveAndValue = {
+        move: 'swap-pieces',
+        whiteWin: data[2].whiteWin,
+        value: 0,
+    };
+
+    data[1] = {
+        moveIndex: 1,
+        color: 'white',
+        whiteWin: 1 - data[2].whiteWin,
+        move: swapMove,
+        bestMoves: [
+            swapMove,
+            ...mirrorMoveAndValues(data[2].bestMoves).filter(m => undefined !== m.whiteWin),
+        ].sort((a, b) => (b.whiteWin as number) - (a.whiteWin as number)),
+    };
+};
+
 export const splitToWorkerTasks = (analyzeGameInput: AnalyzeGameInput): WorkerTaskJobInput[] => {
     const analyzeMoveJobInputs: WorkerTaskJobInput[] = [];
     const currentHistory: string[] = [];
@@ -78,6 +108,13 @@ export const splitToWorkerTasks = (analyzeGameInput: AnalyzeGameInput): WorkerTa
             currentHistory.push(move);
         })
     ;
+
+    // Remove swap move analyze
+    const secondMove = analyzeMoveJobInputs[1];
+
+    if (secondMove && (secondMove.data as AnalyzeMoveInput).move === 'swap-pieces') {
+        analyzeMoveJobInputs.splice(1, 1);
+    }
 
     return analyzeMoveJobInputs;
 };
