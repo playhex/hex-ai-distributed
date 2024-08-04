@@ -1,7 +1,7 @@
 import { Socket } from 'node:net';
 import logger from '../shared/logger';
 import typia from 'typia';
-import { WorkerTaskJobInput, WorkerTaskJobOutput } from '../shared/model/WorkerTask';
+import { WorkerInput, WorkerOutput } from '../shared/model/WorkerTask';
 
 export class Peer
 {
@@ -83,7 +83,7 @@ export class Peer
         this.locked = false;
     }
 
-    async sendJob(jobData: WorkerTaskJobInput): Promise<WorkerTaskJobOutput>
+    async sendJob(jobData: WorkerInput): Promise<WorkerOutput>
     {
         return new Promise((resolve, reject) => {
             const token = Math.floor(Math.random() * 1E12);
@@ -101,7 +101,7 @@ export class Peer
                     this.socket.off('close', onClose);
                     this.socket.off('data', onData);
 
-                    const peerResult = typia.assert<WorkerTaskJobOutput>(JSON.parse(string.substring(`job_result ${token} `.length)));
+                    const peerResult = typia.assert<WorkerOutput>(JSON.parse(string.substring(`job_result ${token} `.length)));
 
                     resolve(peerResult);
                 }

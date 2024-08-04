@@ -146,19 +146,138 @@ showboard
 
 ## Architecture
 
-- Rest API server (express)
+- Server (express)
 
 Can request an API move, or game analysis.
-This will send the job to the next fastest available peer.
 
-Should be internal, or requires API key to prevent anyone abusing or spamming it.
+Will create a job and queue it (redis).
 
-- TCP server for peers (NodeJs.net)
+Once job is done, send result back to client.
 
-Allow to a peer client to connect and accept jobs.
-While connected, peer will receive jobs, and have to send result back.
+```
+client <-> API <-> bullmq/redis
+```
 
-Should be public to allow anyone contributing, still with personal api key to block peer sending invalid data.
+- Peer server (NodeJs.net)
+
+An open socket, workers will connect to this socket.
+Keep all workers online, knows which one is available or working.
+
+Will dequeue jobs to send to next available worker.
+
+```
+bullmq/redis <-> Peer server <-> workers
+```
+
+- Worker (NodeJs.net)
+
+Spawn Hex AI engines, connect to peer server and wait for a job.
+
+Will compute it, and send result back to peer server.
+
+```
+Peer server <-> worker <-> mohex/katahex
+```
+
+### General workflow
+
+```
+ApiInput        ApiOutput
+    v               ^
+        API
+    v               ^
+JobInput        JobOutput
+    v               ^
+        redis
+
+        ...
+
+        redis
+    v               ^
+JobInput        JobOutput
+    v               ^
+        Peer server
+    v               ^
+WorkerInput     WorkerOutput
+    v               ^
+        Worker
+```
+
+Output types are ResultType<T>
+
+API then returns either 200 with data, or 400 with error message.
+
+- Calculate move
+
+Compute a move from AI. Can choose AI and level.
+
+```
+CalculateMoveInput      CalculateMoveOutput
+    v                           ^
+        API
+    v                           ^
+CalculateMoveInput      CalculateMoveOutput
+    v                           ^
+        redis
+
+        ...
+
+        redis
+    v                           ^
+CalculateMoveInput      CalculateMoveOutput
+    v                           ^
+        Peer server
+    v                           ^
+CalculateMoveInput      CalculateMoveOutput
+    v                           ^
+        Worker
+```
+
+- Analyze game
+
+Uses an AI (katahex) to analyze game moves (best moves, blunders...).
+
+```
+AnalyzeGameInput        AnalyzeGameOutput
+    v                           ^
+        API
+    v                           ^
+AnalyzeGameInput        AnalyzeGameOutput
+> AnalyzeMoveInput[]    > AnalyzeMoveOutput[]
+    v                           ^
+        redis
+
+        ...
+
+        redis
+    v                           ^
+AnalyzeMoveInput        AnalyzeMoveOutput
+    v                           ^
+        Peer server
+    v                           ^
+AnalyzeMoveInput        AnalyzeMoveOutput
+    v                           ^
+        Worker
+```
+
+Uses bullmq job children feature.
+
+`AnalyzeGameInput` is kept as parent job, creates multiple `AnalyzeMoveInput` jobs to send to workers.
+
+Once every `AnalyzeMoveInput` is done, will be "reconsolided" back to `AnalyzeGameOutput` which is sent to client.
+
+### Message queues
+
+- Queue `worker_tasks`
+
+Contains WorkerTask jobs. Can be calculate move, or analyze a position.
+
+Analyze a position (AnalyzeMove) have lower priority.
+
+
+- Queue `analyzes`
+
+Contains AnalyzeGame jobs. Every AnalyzeGame job is the parent of multiple AnalyzeMove jobs in the `worker_tasks` queue.
 
 ## Build worker standalone docker image
 

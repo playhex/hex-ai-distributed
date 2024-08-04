@@ -1,4 +1,4 @@
-import { AnalyzeMoveInput, AnalyzeMoveOutput } from '../../shared/model/AnalyzeMove';
+import { AnalyzeMoveInput, AnalyzeMoveOutput } from '../../shared/model/AnalyzeGame';
 import { katahex } from './calculate-move/katahex';
 import { RawMoves, cloneRawMoves, mirrorMoveAndValues, mirrorMove, mirrorMoveAndValue, mirrorRawMoves, rawMovesFromHistory, rawMovesToKatahexPosition } from '../mirrorMoves';
 import { takeKataRawMove, takeKataRawNBestMoves } from '../../shared/utils';

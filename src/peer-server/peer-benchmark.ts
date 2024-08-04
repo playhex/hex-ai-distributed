@@ -1,12 +1,12 @@
 import typia from 'typia';
 import { Peer } from './Peer';
 import logger from '../shared/logger';
-import { WorkerTaskJobInput } from '../shared/model/WorkerTask';
+import { WorkerInput } from '../shared/model/WorkerTask';
 
 /**
  * Same job sent to all new peer to benchmark its computation speed
  */
-const benchmarkJob: WorkerTaskJobInput = {
+const benchmarkJob: WorkerInput = {
     type: 'calculate-move',
     data: {
         game: {

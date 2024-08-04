@@ -1,5 +1,5 @@
 import Move from '../worker/Move';
-import { MoveAndValue } from './model/AnalyzeMove';
+import { MoveAndValue } from './model/AnalyzeGame';
 
 export const takeKataRawNBestMoves = (values: number[][], nBest: number): MoveAndValue[] => {
     const bestMoves: MoveAndValue[] = [];

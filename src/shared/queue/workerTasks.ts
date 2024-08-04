@@ -1,11 +1,11 @@
 import { Queue, QueueEvents, Worker } from 'bullmq';
 import connection from '../connection';
-import { WorkerTaskJobInput, WorkerTaskJobOutput } from '../model/WorkerTask';
+import { WorkerInput, WorkerOutput } from '../model/WorkerTask';
 
 export const WORKER_TASKS_QUEUE_NAME = 'worker_tasks';
 
 
-export const workerTasksQueue = new Queue<WorkerTaskJobInput, WorkerTaskJobOutput>(WORKER_TASKS_QUEUE_NAME, {
+export const workerTasksQueue = new Queue<WorkerInput, WorkerOutput>(WORKER_TASKS_QUEUE_NAME, {
     connection,
     defaultJobOptions: {
         attempts: 10,
@@ -24,7 +24,7 @@ export const workerTasksQueueEvents = new QueueEvents(WORKER_TASKS_QUEUE_NAME, {
     connection,
 });
 
-export const createWorkerTasksWorker = () => new Worker<WorkerTaskJobInput, WorkerTaskJobOutput>(
+export const createWorkerTasksWorker = () => new Worker<WorkerInput, WorkerOutput>(
     WORKER_TASKS_QUEUE_NAME,
     null,
     {
@@ -37,8 +37,8 @@ export const createWorkerTasksWorker = () => new Worker<WorkerTaskJobInput, Work
     },
 );
 
-export const addWorkerTaskToQueue = async (workerTaskJobInput: WorkerTaskJobInput) => {
-    const job = await workerTasksQueue.add(workerTaskJobInput.type, workerTaskJobInput);
+export const addWorkerTaskToQueue = async (workerInput: WorkerInput) => {
+    const job = await workerTasksQueue.add(workerInput.type, workerInput);
 
     return await job.waitUntilFinished(workerTasksQueueEvents);
 };

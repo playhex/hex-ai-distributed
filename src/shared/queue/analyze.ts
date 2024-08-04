@@ -1,24 +1,23 @@
 import { FlowProducer, Processor, Queue, QueueEvents, Worker } from 'bullmq';
 import connection from '../connection';
 import { WORKER_TASKS_QUEUE_NAME } from './workerTasks';
-import { AnalyzeGameInput, AnalyzeGameJobInput, AnalyzeGameJobOutput, AnalyzeGameOutput } from '../model/AnalyzeGame';
-import { WorkerTaskJobInput } from '../model/WorkerTask';
-import { AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue } from '../model/AnalyzeMove';
+import { AnalyzeGameInput, AnalyzeGameOutput, AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue } from '../model/AnalyzeGame';
+import { WorkerInput } from '../model/WorkerTask';
 import { ResultType } from '../model/ResultType';
 import { mirrorMoveAndValues } from '../../worker/mirrorMoves';
 
 export const ANALYZES_QUEUE_NAME = 'analyzes';
 
-export const analyzesQueue = new Queue<AnalyzeGameJobInput, AnalyzeGameJobOutput>(ANALYZES_QUEUE_NAME, { connection });
+export const analyzesQueue = new Queue<AnalyzeGameInput, ResultType<AnalyzeGameOutput>>(ANALYZES_QUEUE_NAME, { connection });
 export const analyzesQueueEvents = new QueueEvents(ANALYZES_QUEUE_NAME, { connection });
 const analyzesFlow = new FlowProducer({ connection });
 
 /**
  * Merge all move analyzes back to a single list.
  */
-export const reconsolidateMoves: Processor<AnalyzeGameJobInput, AnalyzeGameJobOutput> = async (job) => {
+export const reconsolidateMoves: Processor<AnalyzeGameInput, ResultType<AnalyzeGameOutput>> = async (job) => {
     const analyzeMovesOutput = await job.getChildrenValues<ResultType<AnalyzeMoveOutput>>();
-    const data: AnalyzeGameOutput = Array(job.data.movesHistory.split(' ').length).fill(null);
+    const data: AnalyzeMoveOutput[] = Array(job.data.movesHistory.split(' ').length).fill(null);
 
     // Reorder all moves analyze to a single array
     for (const jobKey in analyzeMovesOutput) {
@@ -63,7 +62,7 @@ export const reconsolidateMoves: Processor<AnalyzeGameJobInput, AnalyzeGameJobOu
  * In case of a swap move, second move will be empty.
  * Fill it with analyze from third move mirrored analyzis.
  */
-export const addSwapMoveAnalyze = (data: AnalyzeGameOutput): void => {
+export const addSwapMoveAnalyze = (data: AnalyzeMoveOutput[]): void => {
     if (null !== data[1] || undefined === data[2]) {
         return;
     }
@@ -86,14 +85,17 @@ export const addSwapMoveAnalyze = (data: AnalyzeGameOutput): void => {
     };
 };
 
-export const splitToWorkerTasks = (analyzeGameInput: AnalyzeGameInput): WorkerTaskJobInput[] => {
-    const analyzeMoveJobInputs: WorkerTaskJobInput[] = [];
+/**
+ * From an AnalyzeGame, split all move to parallelize, and returns a list of worker tasks
+ */
+export const splitToWorkerTasks = (analyzeGameInput: AnalyzeGameInput): WorkerInput[] => {
+    const analyzeMoveInputs: WorkerInput[] = [];
     const currentHistory: string[] = [];
     const moves = analyzeGameInput.movesHistory.split(' ');
 
     moves
         .forEach((move, moveIndex) => {
-            analyzeMoveJobInputs.push({
+            analyzeMoveInputs.push({
                 type: 'analyze-move',
                 data: {
                     color: 0 === (moveIndex % 2) ? 'black' : 'white',
@@ -110,24 +112,24 @@ export const splitToWorkerTasks = (analyzeGameInput: AnalyzeGameInput): WorkerTa
     ;
 
     // Remove swap move analyze
-    const secondMove = analyzeMoveJobInputs[1];
+    const secondMove = analyzeMoveInputs[1];
 
     if (secondMove && (secondMove.data as AnalyzeMoveInput).move === 'swap-pieces') {
-        analyzeMoveJobInputs.splice(1, 1);
+        analyzeMoveInputs.splice(1, 1);
     }
 
-    return analyzeMoveJobInputs;
+    return analyzeMoveInputs;
 };
 
-export const addAnalyzeToQueue = async (analyzeGameInput: AnalyzeGameInput): Promise<AnalyzeGameJobOutput> => {
+export const addAnalyzeToQueue = async (analyzeGameInput: AnalyzeGameInput): Promise<ResultType<AnalyzeGameOutput>> => {
     const job = await analyzesFlow.add({
         name: 'analyze-game',
         queueName: ANALYZES_QUEUE_NAME,
         data: analyzeGameInput,
-        children: splitToWorkerTasks(analyzeGameInput).map(workerTaskJobInput => ({
+        children: splitToWorkerTasks(analyzeGameInput).map(workerInput => ({
             name: 'analyze-move',
             queueName: WORKER_TASKS_QUEUE_NAME,
-            data: workerTaskJobInput,
+            data: workerInput,
             opts: {
                 priority: 20,
             },
@@ -137,7 +139,7 @@ export const addAnalyzeToQueue = async (analyzeGameInput: AnalyzeGameInput): Pro
     return await job.job.waitUntilFinished(analyzesQueueEvents);
 }
 
-export const createAnalyzeWorker = () => new Worker<AnalyzeGameJobInput, AnalyzeGameJobOutput>(
+export const createAnalyzeWorker = () => new Worker<AnalyzeGameInput, ResultType<AnalyzeGameOutput>>(
     ANALYZES_QUEUE_NAME,
     reconsolidateMoves,
     {

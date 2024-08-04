@@ -3,7 +3,7 @@ import { TypedEmitter } from 'tiny-typed-emitter';
 import { Peer } from './Peer';
 import logger from '../shared/logger';
 import { createWorkerTasksWorker, workerTasksQueueEvents } from '../shared/queue/workerTasks';
-import { WorkerTaskJobInput, WorkerTaskJobOutput } from '../shared/model/WorkerTask';
+import { WorkerInput, WorkerOutput } from '../shared/model/WorkerTask';
 import { createAnalyzeWorker } from '../shared/queue/analyze';
 
 interface PeerListEvents
@@ -100,7 +100,7 @@ export class HexJobDistributer extends TypedEmitter<PeerListEvents>
         logger.info('Distributer starts processing');
 
         while (true) {
-            let job: undefined | Job<WorkerTaskJobInput, WorkerTaskJobOutput> = undefined;
+            let job: undefined | Job<WorkerInput, WorkerOutput> = undefined;
 
             while (!job) {
                 job = await this.worker.getNextJob(TOKEN);

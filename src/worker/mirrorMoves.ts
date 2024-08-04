@@ -1,4 +1,4 @@
-import { MoveAndValue } from '../shared/model/AnalyzeMove';
+import { MoveAndValue } from '../shared/model/AnalyzeGame';
 import Move from './Move';
 
 type MovesWithoutSwap = {

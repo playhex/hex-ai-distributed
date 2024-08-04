@@ -4,7 +4,7 @@ import { setTimeout } from 'node:timers/promises';
 import logger from '../shared/logger';
 import { katahex } from './task/calculate-move/katahex';
 import typia from 'typia';
-import { WorkerTaskJobInput, WorkerTaskJobOutput } from '../shared/model/WorkerTask';
+import { WorkerInput, WorkerOutput } from '../shared/model/WorkerTask';
 import { aiProcessJob } from './task/calculate-move';
 import { analyzeMove } from './task/analyze-move';
 import { mohex } from './task/calculate-move/mohex';
@@ -72,8 +72,8 @@ const connectAndProcess = () => {
             }
 
             const [, token, jobDataJson] = matches;
-            const task: WorkerTaskJobInput = typia.assert<WorkerTaskJobInput>(JSON.parse(jobDataJson));
-            let output: WorkerTaskJobOutput;
+            const task: WorkerInput = typia.assert<WorkerInput>(JSON.parse(jobDataJson));
+            let output: WorkerOutput;
 
             logger.debug('Received a job. Processing it...', { type: task.type });
 
