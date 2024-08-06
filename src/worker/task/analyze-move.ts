@@ -1,7 +1,8 @@
-import { AnalyzeMoveInput, AnalyzeMoveOutput } from '../../shared/model/AnalyzeGame';
+import { AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue, mirrorMoveAndValue, mirrorMoveAndValues } from '../../shared/model/AnalyzeGame';
 import { katahex } from './calculate-move/katahex';
-import { RawMoves, cloneRawMoves, mirrorMoveAndValues, mirrorMove, mirrorMoveAndValue, mirrorRawMoves, rawMovesFromHistory, rawMovesToKatahexPosition } from '../mirrorMoves';
 import { takeKataRawMove, takeKataRawNBestMoves } from '../../shared/utils';
+import Move from '../../shared/Move';
+import { StandardizedPosition } from '../../shared/StandardizedPosition';
 
 /**
  * Analyze position and returns current win rate, and most probable moves.
@@ -12,7 +13,7 @@ import { takeKataRawMove, takeKataRawNBestMoves } from '../../shared/utils';
  * when recalling set_position.
  *
  * This task:
- *  - does not compute whiteWin for played move because will be set at analyze-game level (while consolidation)
+ *  - does not compute whiteWin for played move because will be set at analyze-game level, from next AnalyzeMove job where that move is played (while consolidation)
  *  - still compute whiteWin of best move if this one is not the played move
  *  - still compute whiteWin of played move if this is last move of the game
  *
@@ -41,26 +42,30 @@ import { takeKataRawMove, takeKataRawNBestMoves } from '../../shared/utils';
  *          whiteWin: 0.339446
  */
 export const analyzeMove = async (analyzeMove: AnalyzeMoveInput): Promise<AnalyzeMoveOutput> => {
-    let rawMoves = rawMovesFromHistory(analyzeMove.movesHistory);
+    const standardizedPosition = StandardizedPosition.fromMovesHistory(analyzeMove.movesHistory);
+
+    standardizedPosition.setBlackToPlay();
 
     // Mirror when white to play: katahex neural network returns best moves as black
-    const mirrored = 'white' === analyzeMove.color;
-    const currentMove = mirrored ? mirrorMove(analyzeMove.move) : analyzeMove.move;
-
-    if (mirrored) {
-        rawMoves = mirrorRawMoves(rawMoves);
-    }
+    const { mirrored } = standardizedPosition;
+    const currentMove = mirrored && analyzeMove.move !== 'pass'
+        ? Move.mirror(analyzeMove.move)
+        : analyzeMove.move
+    ;
 
     await katahex.setBoardSize(analyzeMove.size);
-    await katahex.setPosition(rawMovesToKatahexPosition(rawMoves));
+    await katahex.setStandardizedPosition(standardizedPosition);
 
-    const rawNNOutput = await katahex.parseRawNn(0);
+    const rawNNOutput = await katahex.parseRawNn();
     const bestMoves = takeKataRawNBestMoves(rawNNOutput.values, 4);
-    const move = takeKataRawMove(currentMove, rawNNOutput.values);
+    const move: MoveAndValue = 'pass' !== currentMove
+        ? takeKataRawMove(currentMove, rawNNOutput.values)
+        : { move: 'pass', value: 0 }
+    ;
 
     if (analyzeMove.isLastMoveOfGame) {
         // If last move, calculate whiteWin of position after actual played move and best move
-        const moveWhiteWin = await calcWhiteWinAfterBlackMove(rawMoves, currentMove);
+        const moveWhiteWin = await calcWhiteWinAfterBlackMove(standardizedPosition, currentMove);
 
         move.whiteWin = moveWhiteWin;
 
@@ -74,11 +79,11 @@ export const analyzeMove = async (analyzeMove: AnalyzeMoveInput): Promise<Analyz
 
         // Also process whiteWin for best move (if not same move)
         if (bestMoves[0].whiteWin === undefined) {
-            bestMoves[0].whiteWin = await calcWhiteWinAfterBlackMove(rawMoves, bestMoves[0].move);
+            bestMoves[0].whiteWin = await calcWhiteWinAfterBlackMove(standardizedPosition, bestMoves[0].move);
         }
     } else if (bestMoves[0].move !== currentMove) {
         // Process win rate of best move if another move were played
-        bestMoves[0].whiteWin = await calcWhiteWinAfterBlackMove(rawMoves, bestMoves[0].move);
+        bestMoves[0].whiteWin = await calcWhiteWinAfterBlackMove(standardizedPosition, bestMoves[0].move);
     }
 
     if (mirrored) {
@@ -101,18 +106,18 @@ export const analyzeMove = async (analyzeMove: AnalyzeMoveInput): Promise<Analyz
 };
 
 /**
- * Process win rate of best move if another move is played
+ * Calculate whiteWin after given move is played
  */
-const calcWhiteWinAfterBlackMove = async (rawMoves: RawMoves, move: string): Promise<number> => {
-    let newRawMoves = cloneRawMoves(rawMoves);
+const calcWhiteWinAfterBlackMove = async (standardizedPosition: StandardizedPosition, blackMove: string): Promise<number> => {
+    standardizedPosition = standardizedPosition.clone();
 
     // Black plays
-    newRawMoves.black.push(move);
+    standardizedPosition.blackCells.push(blackMove);
 
     // Mirror because now we play as white, katahex always plays as black
-    newRawMoves = mirrorRawMoves(newRawMoves);
+    standardizedPosition.mirror();
 
-    await katahex.setPosition(rawMovesToKatahexPosition(newRawMoves));
+    await katahex.setStandardizedPosition(standardizedPosition);
 
     const rawNNOutputBest =  await katahex.parseRawNn(0);
 

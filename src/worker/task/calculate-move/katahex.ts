@@ -1,7 +1,8 @@
 import logger from '../../../shared/logger';
 import { CalculateMoveInput } from '../../../shared/model/CalculateMove';
 import Katahex from '../../katahex-cli/Katahex';
-import { mirrorMove, removeSwap, toKatahexPosition } from '../../mirrorMoves';
+import Move from '../../../shared/Move';
+import { StandardizedPosition } from '../../../shared/StandardizedPosition';
 
 const { KATAHEX_BIN } = process.env;
 
@@ -13,7 +14,7 @@ export const katahex = new Katahex(KATAHEX_BIN);
 
 export const processJobKatahex = async (jobData: CalculateMoveInput): Promise<string> => {
     const { size } = jobData.game;
-    let { movesHistory, swapRule, currentPlayer } = jobData.game;
+    let { movesHistory, swapRule } = jobData.game;
 
     if (!jobData.ai) {
         throw new Error('This job is not for an ai');
@@ -26,15 +27,21 @@ export const processJobKatahex = async (jobData: CalculateMoveInput): Promise<st
     }
 
     const { treeSearch } = jobData.ai;
-    const movesWithoutSwap = removeSwap(movesHistory);
+    const standardizedPosition = StandardizedPosition.fromMovesHistory(movesHistory);
 
-    logger.debug(`Katahex received job:\nuse tree search: ${treeSearch ? 'yes' : 'no'}\nparam_game allow_swap ${swapRule ? '1' : '0'}\nboardsize ${size}\nplay-game ${movesHistory}\ngenmove ${currentPlayer}\nshowboard`);
+    if (standardizedPosition.currentPlayer !== jobData.game.currentPlayer) {
+        throw new Error(`currentPlayer is set to ${jobData.game.currentPlayer} but from moves history, it seems to be ${standardizedPosition.currentPlayer} to play`);
+    }
+
+    standardizedPosition.setBlackToPlay();
+
+    logger.debug(`Katahex received job:\nuse tree search: ${treeSearch ? 'yes' : 'no'}\nparam_game allow_swap ${swapRule ? '1' : '0'}\nboardsize ${size}\nplay-game ${movesHistory}\ngenmove ${standardizedPosition.currentPlayer}\nshowboard`);
 
     await katahex.setBoardSize(size);
     await katahex.sendCommand('clear_board');
 
     if ('' !== movesHistory) {
-        await katahex.setPosition(toKatahexPosition(movesWithoutSwap));
+        await katahex.setStandardizedPosition(standardizedPosition);
     }
 
     logger.debug(await katahex.showboard());
@@ -46,16 +53,13 @@ export const processJobKatahex = async (jobData: CalculateMoveInput): Promise<st
 
     logger.debug('generated move, not mirrored: ' + generatedMove);
 
-    const { swapped, moves } = movesWithoutSwap;
-    const even = !(moves.split(' ').length % 2);
+    const { mirrored } = standardizedPosition;
 
-    const shouldMirrorResult = swapped === even;
-
-    if (shouldMirrorResult) {
-        generatedMove = mirrorMove(generatedMove);
+    if (mirrored) {
+        generatedMove = Move.mirror(generatedMove);
     }
 
-    logger.debug('mirrored: ' + shouldMirrorResult);
+    logger.debug('mirrored: ' + mirrored);
     logger.debug('generated move: ' + generatedMove);
 
     return generatedMove;

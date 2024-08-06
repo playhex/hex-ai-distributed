@@ -1,5 +1,6 @@
 import { GameParameters, MohexCommand, MohexParameters } from './types';
 import GTPClient from '../GTPClient';
+import { StandardizedPosition } from '../../shared/StandardizedPosition';
 
 /**
  * Spawn a process from mohex binary,
@@ -60,6 +61,42 @@ export default class Mohex
     async playGame(moves: string): Promise<void>
     {
         await this.sendCommand('play-game', moves);
+    }
+
+    async setStandardizedPosition(standardizedPosition: StandardizedPosition): Promise<void>
+    {
+        const { blackCells, whiteCells } = standardizedPosition;
+
+        if (0 === blackCells.length && 0 === whiteCells.length) {
+            await this.sendCommand('clear_board');
+            return;
+        }
+
+        const playGame = [];
+        let i = 0;
+
+        while (i < blackCells.length && i < whiteCells.length) {
+            playGame.push(blackCells[i]);
+            playGame.push(whiteCells[i]);
+
+            ++i;
+        }
+
+        if (blackCells.length > i) {
+            playGame.push(blackCells[i]);
+        }
+
+        if (playGame.length > 0) {
+            await this.playGame(playGame.join(' '));
+        }
+
+        for (const cell of blackCells.slice(i + 1)) {
+            await this.play('black', cell);
+        }
+
+        for (const cell of whiteCells.slice(i)) {
+            await this.play('white', cell);
+        }
     }
 
     async showboard(): Promise<string>

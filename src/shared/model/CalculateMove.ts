@@ -29,11 +29,15 @@ export type CalculateMoveInput = {
         ;
 
         /**
-         * All played move.
+         * All played move (i.e "a1 swap-pieces b2 pass ...").
          * Will calculate next move.
          */
         movesHistory: string;
 
+        /**
+         * Also guessed from moves count in history,
+         * just checking.
+         */
         currentPlayer: 'black' | 'white';
 
         swapRule: boolean;

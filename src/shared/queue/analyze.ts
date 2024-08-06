@@ -1,10 +1,9 @@
 import { FlowProducer, Processor, Queue, QueueEvents, Worker } from 'bullmq';
 import connection from '../connection';
 import { WORKER_TASKS_QUEUE_NAME } from './workerTasks';
-import { AnalyzeGameInput, AnalyzeGameOutput, AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue } from '../model/AnalyzeGame';
+import { AnalyzeGameInput, AnalyzeGameOutput, AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue, mirrorMoveAndValues } from '../model/AnalyzeGame';
 import { WorkerInput } from '../model/WorkerTask';
 import { ResultType } from '../model/ResultType';
-import { mirrorMoveAndValues } from '../../worker/mirrorMoves';
 
 export const ANALYZES_QUEUE_NAME = 'analyzes';
 

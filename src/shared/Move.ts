@@ -3,13 +3,18 @@ export default class Move
     constructor(
         public row: number,
         public col: number,
+        public specialMove?: 'swap-pieces' | 'pass',
     ) {}
 
     /**
-     * @throws Error if move is not like "f6", or like "swap-pieces"
+     * @throws Error if move is not like "f6", or like "swap-pieces" or "pass"
      */
     static fromString(moveString: string): Move
     {
+        if ('swap-pieces' === moveString || 'pass' === moveString) {
+            return new Move(-1, -1, moveString);
+        }
+
         const match = moveString.match(/^"?([a-z]{1,2})(\d{1,2})"?$/);
 
         if (null === match) {
@@ -46,6 +51,10 @@ export default class Move
 
     toString(): string
     {
+        if (this.specialMove) {
+            return this.specialMove;
+        }
+
         return Move.colToLetter(this.col) + Move.rowToNumber(this.row);
     }
 
@@ -56,11 +65,16 @@ export default class Move
 
     clone(): Move
     {
-        return new Move(this.row, this.col);
+        return new Move(this.row, this.col, this.specialMove);
     }
 
     cloneMirror(): Move
     {
-        return new Move(this.col, this.row);
+        return new Move(this.col, this.row, this.specialMove);
+    }
+
+    static mirror(move: string): string
+    {
+        return Move.fromString(move).cloneMirror().toString();
     }
 }

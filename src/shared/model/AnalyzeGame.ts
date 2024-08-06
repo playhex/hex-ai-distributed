@@ -1,4 +1,5 @@
 import { tags } from 'typia';
+import Move from '../Move';
 
 export type AnalyzeGameInput = {
     movesHistory: string
@@ -99,3 +100,13 @@ export type AnalyzeMoveOutput = {
      */
     bestMoves: MoveAndValue[];
 };
+
+export const mirrorMoveAndValue = (moveAndValue: MoveAndValue): MoveAndValue => ({
+    move: Move.mirror(moveAndValue.move),
+    value: moveAndValue.value, // not mirrored because move value stays same
+    whiteWin: undefined === moveAndValue.whiteWin ? undefined : 1 - moveAndValue.whiteWin,
+});
+
+export const mirrorMoveAndValues = (moveAndValues: MoveAndValue[]): MoveAndValue[] => moveAndValues
+    .map(moveAndValue => mirrorMoveAndValue(moveAndValue))
+;

@@ -1,3 +1,4 @@
+import { StandardizedPosition } from '../../shared/StandardizedPosition';
 import logger from '../../shared/logger';
 import { takeKataRawNBestMoves } from '../../shared/utils';
 import GTPClient from '../GTPClient';
@@ -70,6 +71,28 @@ export default class Katahex
         await this.sendCommand('set_position', position);
     }
 
+    async setStandardizedPosition(standardizedPosition: StandardizedPosition): Promise<void>
+    {
+        if (0 === standardizedPosition.blackCells.length && 0 === standardizedPosition.whiteCells.length) {
+            await this.sendCommand('clear_board');
+            return;
+        }
+
+        const black = standardizedPosition
+            .blackCells
+            .map(cell => `black ${cell}`)
+            .join(' ')
+        ;
+
+        const white = standardizedPosition
+            .whiteCells
+            .map(cell => `white ${cell}`)
+            .join(' ')
+        ;
+
+        await this.setPosition(black + (black && white ? ' ' : '') + white);
+    }
+
     async showboard(): Promise<string>
     {
         return await this.sendCommand('showboard');
@@ -98,7 +121,7 @@ export default class Katahex
     {
         const move = await this.sendCommand('genmove_debug', color);
 
-        if (!move.match(/^pa?ss$/)) {
+        if (!move.match(/^pa?ss$/)) { // katahex returns "pss"
             return move;
         }
 
@@ -154,6 +177,7 @@ export default class Katahex
     /**
      * Only use raw neural network output to get best move from its intuition.
      * Don't make any tree searching.
+     * Returns best move for black.
      */
     async getBestMoveFromNeuralNetworkOutput(symmetry: number = 0): Promise<string>
     {

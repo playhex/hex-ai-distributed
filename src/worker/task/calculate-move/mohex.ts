@@ -1,7 +1,8 @@
 import logger from '../../../shared/logger';
 import { CalculateMoveInput } from '../../../shared/model/CalculateMove';
-import { mirrorColor, mirrorMove, removeSwap } from '../../mirrorMoves';
 import Mohex from '../../mohex-cli/Mohex';
+import Move from '../../../shared/Move';
+import { StandardizedPosition } from '../../../shared/StandardizedPosition';
 
 const { MOHEX_BIN } = process.env;
 
@@ -42,7 +43,7 @@ export const processJobMohex = async (jobData: CalculateMoveInput): Promise<stri
         throw new Error('Mohex can play only on board with size in [1, 13]');
     }
 
-    let { movesHistory, swapRule, currentPlayer } = jobData.game;
+    let { movesHistory, swapRule } = jobData.game;
 
     if (!jobData.ai) {
         throw new Error('This job is not for an ai');
@@ -55,7 +56,14 @@ export const processJobMohex = async (jobData: CalculateMoveInput): Promise<stri
     }
 
     const { maxGames } = jobData.ai;
-    const { mirrored, swapped, moves } = removeSwap(movesHistory);
+    const standardizedPosition = StandardizedPosition.fromMovesHistory(movesHistory);
+    const { mirrored, swapStillAllowed, blackCells, whiteCells, currentPlayer } = standardizedPosition;
+
+    console.log(movesHistory, standardizedPosition);
+
+    if (currentPlayer !== jobData.game.currentPlayer) {
+        throw new Error(`currentPlayer is set to ${jobData.game.currentPlayer} but from moves history, it seems to be ${currentPlayer} to play`);
+    }
 
     logger.debug(`Mohex received job:\nparam_mohex max_games ${maxGames}\nparam_game allow_swap ${swapRule ? '1' : '0'}\nboardsize ${size}\nplay-game ${movesHistory}\ngenmove ${currentPlayer}\nshowboard`);
 
@@ -73,26 +81,27 @@ export const processJobMohex = async (jobData: CalculateMoveInput): Promise<stri
     });
 
     await mohex.setGameParameters({
-        allow_swap: swapped ? false : swapRule,
+        allow_swap: swapStillAllowed && swapRule,
     });
 
     await mohex.setBoardSize(size);
 
     try {
-        await mohex.playGame(moves);
+        await mohex.setStandardizedPosition(standardizedPosition);
     } catch (e) {
-        logger.notice('Error while replaying game', { moves });
+        logger.notice('Error while replaying game', { blackCells, whiteCells });
         throw e;
     }
 
     logger.debug('mirrored: ' + mirrored);
     logger.debug(await mohex.showboard());
 
-    let generatedMove = await mohex.generateMove(mirrored ? mirrorColor(currentPlayer) : currentPlayer);
+    let generatedMove = await mohex.generateMove(standardizedPosition.currentPlayer);
 
     if (mirrored) {
-        generatedMove = mirrorMove(generatedMove);
+        generatedMove = Move.mirror(generatedMove);
     }
+
     logger.debug('generated move: ' + generatedMove);
 
     return generatedMove;
