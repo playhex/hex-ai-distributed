@@ -6,6 +6,7 @@ import { addAnalyzeToQueue, analyzesQueue } from '../shared/queue/analyze';
 import { addWorkerTaskToQueue, workerTasksQueue } from '../shared/queue/workerTasks';
 import { CalculateMoveInput } from '../shared/model/CalculateMove';
 import { AnalyzeGameInput } from '../shared/model/AnalyzeGame';
+import { getPositions, logPositionAnalyzed } from './dbLog';
 
 const api = express();
 
@@ -17,9 +18,13 @@ api.post('/calculate-move', json(), async (req, res) => {
     try {
         logger.info('move requested, queuing to distributer');
 
+        const calculateMoveInput = typia.assert<CalculateMoveInput>(req.body);
+
+        logPositionAnalyzed('move', calculateMoveInput.game.movesHistory, req.ip ?? '');
+
         const result = await addWorkerTaskToQueue({
             type: 'calculate-move',
-            data: typia.assert<CalculateMoveInput>(req.body),
+            data: calculateMoveInput,
         });
 
         logger.info('distributer processed move, sending to client the result:', result);
@@ -46,6 +51,8 @@ api.post('/analyze-game', json(), async (req, res) => {
         const analyzeGameInput = typia.assert<AnalyzeGameInput>(req.body);
         logger.info('review requested, queuing to distributer');
         logger.debug(`review data: size: ${analyzeGameInput.size} movesHistory: ${analyzeGameInput.movesHistory}`);
+
+        logPositionAnalyzed('analyze', analyzeGameInput.movesHistory, req.ip ?? '');
 
         const result = await addAnalyzeToQueue(analyzeGameInput);
         logger.info('distributer processed move, sending to client the result:', result);
@@ -81,6 +88,13 @@ api.get('/status', async (req, res) => {
     const response = await fetch(peerStatusEndpoint);
 
     res.send(await response.json());
+});
+
+api.get('/processed-positions', async (req, res) => {
+    res.send(await getPositions({
+        createdBefore: req.query.createdBefore as string | undefined,
+        createdAfter: req.query.createdAfter as string | undefined,
+    }));
 });
 
 mountBullUI(api, '/bull', [
