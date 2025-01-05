@@ -9,6 +9,7 @@
     "server": "nodemon src/server/index.ts",
     "peer-server": "nodemon src/peer-server/index.ts",
     "worker": "nodemon src/worker/index.ts",
+    "build": "rm -fr dist/ && tsc && cp .env* dist/",
     "generate": "yarn typia generate --input src/shared/model --output src/shared/typia-generated",
     "prepare": "ts-patch install && typia patch",
     "obliterate": "yarn ts-node obliterate.ts"

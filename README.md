@@ -4,30 +4,50 @@ API that process Hex move by sending move calculation to peers.
 
 ## Install
 
+Clone this repo, then:
+
 ```
 yarn install
 ```
 
-## Run
+This library requires a Redis instance.
+Configure your redis url in an empty `.env` file:
 
-Needs redis, start a local instance with docker:
+```
+REDIS_URL=0.0.0.0:6379
+```
+
+With Docker, you can quickly start a local instance of redis with:
 
 ``` bash
-docker run -p 6399:6379 redis
-```
-
-Then in `.env`, add:
-
-```
-REDIS_URL=0.0.0.0:6399
+docker run -p 6379:6379 redis
 ```
 
 Then run server and/or a worker in separate processes:
 
 ```
-node dist/server
-node dist/worker
+yarn peer-server
+yarn server
+yarn worker
 ```
+
+## Build for production
+
+Build typescript files with:
+
+```
+yarn build
+```
+
+Then run server and/or worker in separate processes:
+
+```
+node dist/src/peer-server
+node dist/src/server
+node dist/src/worker
+```
+
+Or run these with pm2.
 
 ## With docker
 
