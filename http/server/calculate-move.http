@@ -1,0 +1,54 @@
+# Calculate Move
+# POST /calculate-move
+# Queue a move calculation via the distributed network.
+
+### Mohex
+POST {{HEX_AI_DISTRIBUTED_API}}/calculate-move
+Content-Type: application/json
+
+{
+    "game": {
+        "size": 11,
+        "currentPlayer": "black",
+        "movesHistory": "e4 d6",
+        "swapRule": false
+    },
+    "ai": {
+        "engine": "mohex",
+        "maxGames": 20
+    }
+}
+
+### Katahex - intuition (raw neural network, no tree search)
+POST {{HEX_AI_DISTRIBUTED_API}}/calculate-move
+Content-Type: application/json
+
+{
+    "game": {
+        "size": 11,
+        "currentPlayer": "black",
+        "movesHistory": "e4 d6",
+        "swapRule": false
+    },
+    "ai": {
+        "engine": "katahex",
+        "treeSearch": false
+    }
+}
+
+### Katahex - tree search (harder)
+POST {{HEX_AI_DISTRIBUTED_API}}/calculate-move
+Content-Type: application/json
+
+{
+    "game": {
+        "size": 11,
+        "currentPlayer": "black",
+        "movesHistory": "e4 d6",
+        "swapRule": false
+    },
+    "ai": {
+        "engine": "katahex",
+        "treeSearch": true
+    }
+}

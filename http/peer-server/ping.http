@@ -1,0 +1,6 @@
+# Ping
+# GET /ping
+# Health check endpoint.
+
+### Ping peer server
+GET {{HEX_AI_DISTRIBUTED_PEER_API}}/ping

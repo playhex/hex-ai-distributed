@@ -1,0 +1,6 @@
+# Peers Status
+# GET /status
+# Returns the current status of all connected peers (direct peer-server call).
+
+### Get peers status
+GET {{HEX_AI_DISTRIBUTED_PEER_API}}/status

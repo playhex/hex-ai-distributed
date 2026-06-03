@@ -109,9 +109,7 @@ Result:
 f7
 ```
 
-See all the possible HTTP requests in this postman collection:
-
-<https://www.postman.com/alcalyn/workspace/hex/collection/32226212-905e39fc-27b0-4792-9634-88a2dba2de5c>
+See all the possible HTTP requests in `http/` folder. We can use HttpYac and IDE plugins to run api call directly from these files.
 
 ## Katahex
 
