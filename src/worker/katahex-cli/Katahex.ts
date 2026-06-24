@@ -153,7 +153,7 @@ export default class Katahex
             const globalValue = lines.shift()?.split(' ');
 
             if (globalValue && 2 === globalValue.length) {
-                globalValues[globalValue[0]] = parseFloat(globalValue[1]);
+                globalValues[globalValue[0]] = parseFloatOrZero(globalValue[1]);
             }
         }
 
@@ -169,7 +169,7 @@ export default class Katahex
         lines.pop();
 
         return {
-            values: lines.map(line => line.trim().split(/ +/).map(v => parseFloat(v))),
+            values: lines.map(line => line.trim().split(/ +/).map(v => parseFloatOrZero(v))),
             whiteWin: globalValues['whiteWin'],
         };
     }
@@ -199,3 +199,13 @@ export default class Katahex
         ].join(' ');
     }
 }
+
+/**
+ * Do not return NaN when parsing "N/A",
+ * else it will json stringify to null
+ */
+const parseFloatOrZero = (v: string): number => {
+    const n = parseFloat(v);
+
+    return isNaN(n) ? 0 : n;
+};

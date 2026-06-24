@@ -1,0 +1,27 @@
+# Analyze Position
+# POST /analyze-position
+# Analyze a single board position using Katahex raw neural network.
+# Accepts arbitrary positions (unequal stone counts allowed).
+
+### Analyze custom position (black to play)
+POST {{HEX_AI_DISTRIBUTED_API}}/analyze-position
+Content-Type: application/json
+
+{
+    "color": "black",
+    "size": 14,
+    "white": "a1 d4 f5 f7 g9 g11 g14",
+    "black": "d5 k2"
+}
+
+
+### Analyze empty board (black to play)
+POST {{HEX_AI_DISTRIBUTED_API}}/analyze-position
+Content-Type: application/json
+
+{
+    "color": "black",
+    "size": 11,
+    "white": "",
+    "black": ""
+}

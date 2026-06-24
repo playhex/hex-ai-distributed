@@ -7,6 +7,7 @@ import typia from 'typia';
 import { WorkerInput, WorkerOutput } from '../shared/model/WorkerTask';
 import { aiProcessJob } from './task/calculate-move';
 import { analyzeMove } from './task/analyze-move';
+import { analyzePosition } from './task/analyze-position';
 import { mohex } from './task/calculate-move/mohex';
 
 const { SERVER_HOST, SERVER_PORT } = process.env;
@@ -90,6 +91,13 @@ const connectAndProcess = () => {
                         output = {
                             success: true,
                             data: await analyzeMove(task.data),
+                        };
+                        break;
+
+                    case 'analyze-position':
+                        output = {
+                            success: true,
+                            data: await analyzePosition(task.data),
                         };
                         break;
                 }

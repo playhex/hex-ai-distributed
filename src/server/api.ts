@@ -6,6 +6,7 @@ import { addAnalyzeToQueue, analyzesQueue } from '../shared/queue/analyze';
 import { addWorkerTaskToQueue, workerTasksQueue } from '../shared/queue/workerTasks';
 import { CalculateMoveInput } from '../shared/model/CalculateMove';
 import { AnalyzeGameInput } from '../shared/model/AnalyzeGame';
+import { AnalyzePositionInput } from '../shared/model/AnalyzePosition';
 
 const api = express();
 
@@ -65,6 +66,35 @@ api.post('/analyze-game', json(), async (req, res) => {
         }
 
         logger.warning('error while validating hexJobData input', e);
+        res.status(400).send(e.message);
+    }
+});
+
+api.post('/analyze-position', json(), async (req, res) => {
+    try {
+        const analyzePositionInput = typia.assert<AnalyzePositionInput>(req.body);
+        logger.info('position analysis requested, queuing to distributer');
+
+        const result = await addWorkerTaskToQueue({
+            type: 'analyze-position',
+            data: analyzePositionInput,
+        });
+
+        logger.info('distributer processed analyze-position, sending to client the result:', result);
+
+        if (result.success) {
+            res.send(result.data);
+        } else {
+            res.status(400).send(result.error);
+        }
+    } catch (e) {
+        if (!(e instanceof TypeGuardError)) {
+            logger.error('Error while /analyze-position', e);
+            res.status(400).send(e);
+            return;
+        }
+
+        logger.warning('error while validating request body input', e);
         res.status(400).send(e.message);
     }
 });

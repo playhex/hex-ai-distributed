@@ -1,5 +1,6 @@
 import { AnalyzeMoveInput, AnalyzeMoveOutput } from './AnalyzeGame';
 import { CalculateMoveInput, CalculateMoveOutput } from './CalculateMove';
+import { AnalyzePositionInput, AnalyzePositionOutput } from './AnalyzePosition';
 import { ResultType } from './ResultType';
 
 export type WorkerInput = {
@@ -8,10 +9,13 @@ export type WorkerInput = {
 } | {
     type: 'analyze-move';
     data: AnalyzeMoveInput;
+} | {
+    type: 'analyze-position';
+    data: AnalyzePositionInput;
 };
 
 /**
  * Output returned by worker and peer-server.
  * `result: false` means an handled error that should be propagated to server response.
  */
-export type WorkerOutput = ResultType<CalculateMoveOutput | AnalyzeMoveOutput>;
+export type WorkerOutput = ResultType<CalculateMoveOutput | AnalyzeMoveOutput | AnalyzePositionOutput>;
