@@ -6,7 +6,7 @@ import { StandardizedPosition } from '../../shared/StandardizedPosition';
  * Spawn a process from mohex binary,
  * send commands and get result as promise.
  *
- * {@link https://github.com/cgao3/benzene-vanilla-cmake} Download and build mohex from this repository.
+ * {@link https://github.com/playhex/benzene-vanilla-cmake.git} Download and build mohex from this repository.
  */
 export default class Mohex
 {

@@ -39,8 +39,8 @@ showboard
 export const processJobMohex = async (jobData: CalculateMoveInput): Promise<string> => {
     const { size } = jobData.game;
 
-    if (size < 1 || size > 13) {
-        throw new Error('Mohex can play only on board with size in [1, 13]');
+    if (size < 1 || size > 14) {
+        throw new Error('Mohex can play only on board with size in [1, 14]');
     }
 
     let { movesHistory, swapRule } = jobData.game;
