@@ -306,7 +306,11 @@ To run a worker from an image with all inside (source code and katahex model),
 - then run:
 
 ``` bash
-# build
+# If base image changed (src/worker/Dockerfile)
+docker build -f src/worker/Dockerfile -t alcalyn/hex-distributed-ai-worker:latest .
+docker push alcalyn/hex-distributed-ai-worker:latest
+
+# build standalone image (add --no-cache if base image changed)
 docker build -f src/worker/Dockerfile.standalone -t alcalyn/hex-distributed-ai-worker:standalone .
 
 # publish
