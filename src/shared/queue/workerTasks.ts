@@ -1,5 +1,5 @@
 import { Queue, QueueEvents, Worker } from 'bullmq';
-import connection from '../connection';
+import connection, { bullmqPrefix } from '../connection';
 import { WorkerInput, WorkerOutput } from '../model/WorkerTask';
 
 export const WORKER_TASKS_QUEUE_NAME = 'worker_tasks';
@@ -7,6 +7,7 @@ export const WORKER_TASKS_QUEUE_NAME = 'worker_tasks';
 
 export const workerTasksQueue = new Queue<WorkerInput, WorkerOutput>(WORKER_TASKS_QUEUE_NAME, {
     connection,
+    prefix: bullmqPrefix,
     defaultJobOptions: {
         attempts: 10,
         removeOnComplete: {
@@ -22,6 +23,7 @@ export const workerTasksQueue = new Queue<WorkerInput, WorkerOutput>(WORKER_TASK
 
 export const workerTasksQueueEvents = new QueueEvents(WORKER_TASKS_QUEUE_NAME, {
     connection,
+    prefix: bullmqPrefix,
 });
 
 export const createWorkerTasksWorker = () => new Worker<WorkerInput, WorkerOutput>(
@@ -29,6 +31,7 @@ export const createWorkerTasksWorker = () => new Worker<WorkerInput, WorkerOutpu
     null,
     {
         connection,
+        prefix: bullmqPrefix,
         maxStalledCount: 3,
 
         // Following values are tripled because katahex take more time

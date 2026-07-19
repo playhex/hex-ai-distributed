@@ -1,7 +1,7 @@
 import Redis from 'ioredis';
 import logger from './logger';
 
-const { REDIS_URL } = process.env;
+const { REDIS_URL, REDIS_PREFIX } = process.env;
 
 if (!REDIS_URL) {
     throw new Error('Cannot start, requires REDIS_URL=redis://...');
@@ -16,3 +16,4 @@ const connection = new Redis(REDIS_URL, {
 logger.info('Connected to redis ' + REDIS_URL);
 
 export default connection;
+export const bullmqPrefix = REDIS_PREFIX ?? undefined;

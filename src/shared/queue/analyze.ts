@@ -1,5 +1,5 @@
 import { FlowProducer, Processor, Queue, QueueEvents, Worker } from 'bullmq';
-import connection from '../connection';
+import connection, { bullmqPrefix } from '../connection';
 import { WORKER_TASKS_QUEUE_NAME } from './workerTasks';
 import { AnalyzeGameInput, AnalyzeGameOutput, AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue, mirrorMoveAndValues } from '../model/AnalyzeGame';
 import { WorkerInput } from '../model/WorkerTask';
@@ -7,9 +7,9 @@ import { ResultType } from '../model/ResultType';
 
 export const ANALYZES_QUEUE_NAME = 'analyzes';
 
-export const analyzesQueue = new Queue<AnalyzeGameInput, ResultType<AnalyzeGameOutput>>(ANALYZES_QUEUE_NAME, { connection });
-export const analyzesQueueEvents = new QueueEvents(ANALYZES_QUEUE_NAME, { connection });
-const analyzesFlow = new FlowProducer({ connection });
+export const analyzesQueue = new Queue<AnalyzeGameInput, ResultType<AnalyzeGameOutput>>(ANALYZES_QUEUE_NAME, { connection, prefix: bullmqPrefix });
+export const analyzesQueueEvents = new QueueEvents(ANALYZES_QUEUE_NAME, { connection, prefix: bullmqPrefix });
+const analyzesFlow = new FlowProducer({ connection, prefix: bullmqPrefix });
 
 /**
  * Merge all move analyzes back to a single list.
@@ -143,6 +143,7 @@ export const createAnalyzeWorker = () => new Worker<AnalyzeGameInput, ResultType
     reconsolidateMoves,
     {
         connection,
+        prefix: bullmqPrefix,
         concurrency: 1,
     },
 );
