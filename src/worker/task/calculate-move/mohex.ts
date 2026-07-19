@@ -6,11 +6,7 @@ import { StandardizedPosition } from '../../../shared/StandardizedPosition';
 
 const { MOHEX_BIN } = process.env;
 
-if (!MOHEX_BIN) {
-    throw new Error('Requires MOHEX_BIN=... in .env file');
-}
-
-export const mohex = new Mohex(MOHEX_BIN);
+export const mohex = MOHEX_BIN ? new Mohex(MOHEX_BIN) : null;
 
 /**
  * Mohex "swap-pieces" is actually a swap sides. Black stone stays, but players change color.
@@ -37,6 +33,10 @@ showboard
  * If there is a swap piece move, drop it, mirror first move, and invert colors.
  */
 export const processJobMohex = async (jobData: CalculateMoveInput): Promise<string> => {
+    if (!mohex) {
+        throw new Error('Requires MOHEX_BIN=... in .env file');
+    }
+
     const { size } = jobData.game;
 
     if (size < 1 || size > 14) {

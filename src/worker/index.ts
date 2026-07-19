@@ -166,9 +166,13 @@ const connectAndProcess = () => {
 };
 
 (async () => {
-    logger.info('Waiting for Mohex to be ready...');
-    logger.info(await mohex.version());
-    logger.info('Mohex ready');
+    if (mohex) {
+        logger.info('Waiting for Mohex to be ready...');
+        logger.info(await mohex.version());
+        logger.info('Mohex ready');
+    } else {
+        logger.info('MOHEX_BIN not set, skipping Mohex.');
+    }
 
     logger.info('Waiting for Katahex to be ready...');
     logger.info(await katahex.version());

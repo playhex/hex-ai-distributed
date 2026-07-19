@@ -13,11 +13,11 @@ describe('StandardizedPosition', () => {
             assert.strictEqual(position.currentPlayer, 'black');
         });
 
-        it('creates position with swap move', () => {
+        it('creates position with swap move, keeping the same cell (Y)', () => {
             const position = StandardizedPosition.fromMovesHistory('a2 swap-pieces');
 
             assert.strictEqual(position.blackCells.join(' '), '');
-            assert.strictEqual(position.whiteCells.join(' '), 'b1');
+            assert.strictEqual(position.whiteCells.join(' '), 'a2');
             assert.strictEqual(position.swapStillAllowed, false);
             assert.strictEqual(position.mirrored, false);
             assert.strictEqual(position.currentPlayer, 'black');
@@ -70,7 +70,7 @@ describe('StandardizedPosition', () => {
 
             position.setBlackToPlay();
 
-            assert.strictEqual(position.blackCells.join(' '), 'a2 c2');
+            assert.strictEqual(position.blackCells.join(' '), 'b1 c2');
             assert.strictEqual(position.whiteCells.join(' '), 'd3');
             assert.strictEqual(position.swapStillAllowed, false);
             assert.strictEqual(position.mirrored, true);

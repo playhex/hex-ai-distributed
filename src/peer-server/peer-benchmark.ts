@@ -16,8 +16,8 @@ const benchmarkJob: WorkerInput = {
             swapRule: false,
         },
         ai: {
-            engine: 'mohex',
-            maxGames: 2000,
+            engine: 'katahex',
+            treeSearch: false,
         },
     }
 };

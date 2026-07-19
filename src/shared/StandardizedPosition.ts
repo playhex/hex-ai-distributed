@@ -22,11 +22,11 @@ import Move from './Move';
  *          mirrored: true,
  *      }
  *
- *  - swap move
+ *  - swap move (Y: same cell, only the color changes)
  *      StandardizedPosition.fromMovesHistory('b1 swap-pieces') =>
  *      {
  *          black: [],
- *          white: ['a2'],
+ *          white: ['b1'],
  *          swapStillAllowed: false,
  *      }
  *
@@ -101,7 +101,9 @@ export class StandardizedPosition
 
         if ('swap-pieces' === secondMove) {
             if ('pass' !== firstMove) {
-                standardizedPosition.whiteCells.push(Move.mirror(firstMove));
+                // In Y, swapping keeps the same cell and only changes the stone
+                // color: the first (black) stone becomes a white stone in place.
+                standardizedPosition.whiteCells.push(firstMove);
             }
         } else {
             if ('pass' !== firstMove) {
