@@ -1,5 +1,5 @@
 import logger from '../../../shared/logger';
-import { CalculateMoveInput } from '../../../shared/model/CalculateMove';
+import { KatahexMoveInput } from '../../../shared/protocol';
 import Katahex from '../../katahex-cli/Katahex';
 import Move from '../../../shared/Move';
 import { StandardizedPosition } from '../../../shared/StandardizedPosition';
@@ -12,21 +12,13 @@ if (!KATAHEX_BIN) {
 
 export const katahex = new Katahex(KATAHEX_BIN);
 
-export const processJobKatahex = async (jobData: CalculateMoveInput): Promise<string> => {
+/**
+ * @param treeSearch Whether Katahex uses tree search (harder),
+ *                   or only use raw neural network output (easier).
+ */
+export const processJobKatahex = async (jobData: KatahexMoveInput, treeSearch: boolean): Promise<string> => {
     const { size } = jobData.game;
-    let { movesHistory, swapRule } = jobData.game;
-
-    if (!jobData.ai) {
-        throw new Error('This job is not for an ai');
-    }
-
-    const { engine } = jobData.ai;
-
-    if ('katahex' !== engine) {
-        throw new Error('Only supports katahex engine, got: ' + engine);
-    }
-
-    const { treeSearch } = jobData.ai;
+    const { movesHistory, swapRule } = jobData.game;
     const standardizedPosition = StandardizedPosition.fromMovesHistory(movesHistory);
 
     if (standardizedPosition.currentPlayer !== jobData.game.currentPlayer) {

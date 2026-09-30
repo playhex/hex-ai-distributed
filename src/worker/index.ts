@@ -1,179 +1,267 @@
 import '../../config';
-import { createConnection, Socket } from 'node:net';
+import { randomUUID } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
-import logger from '../shared/logger';
-import { katahex } from './task/calculate-move/katahex';
 import typia from 'typia';
-import { WorkerInput, WorkerOutput } from '../shared/model/WorkerTask';
-import { aiProcessJob } from './task/calculate-move';
-import { analyzeMove } from './task/analyze-move';
-import { analyzePosition } from './task/analyze-position';
-import { mohex } from './task/calculate-move/mohex';
+import logger from '../shared/logger';
+import { AiJobType, getAiJobTypeEngine, getEngineAiJobTypes, getEngineDefaultAiJobTypes, HEARTBEAT_MS, isAiJobType, isEngine, ReservedJob } from '../shared/protocol';
+import { EngineWorker, IMPLEMENTED_AI_JOB_TYPES, loadEngineWorker } from './engines';
+import { GTPEngineError } from './GTPClient';
 
-const { SERVER_HOST, SERVER_PORT } = process.env;
+const { ENGINE, AI_JOB_TYPES, HEX_URL, AI_WORKER_KEY } = process.env;
 
-if (!SERVER_HOST || !SERVER_PORT) {
-    throw new Error('Needs SERVER_HOST and SERVER_PORT in .env file');
+if (!isEngine(ENGINE)) {
+    throw new Error(`ENGINE must be set to one of: katahex, mohex, davies. Got "${ENGINE}"`);
 }
 
-let socket: null | Socket = null;
+if (!HEX_URL || !AI_WORKER_KEY) {
+    throw new Error('HEX_URL and AI_WORKER_KEY must be set in env vars. Ask a key to PlayHex admins.');
+}
 
-const connectAndProcess = () => {
-    logger.info(`Creating connection to server ${SERVER_HOST}:${SERVER_PORT}...`);
+const engine = ENGINE;
 
-    if (null !== socket) {
-        logger.notice('There is already a socket, stopping now to prevent creating another');
-        return;
-    }
+/**
+ * Job types this worker processes.
+ * By default, job types of its engine, except opt-in ones (i.e katahex-mcts-*) which must be explicitly set.
+ */
+const jobTypes: AiJobType[] = AI_JOB_TYPES
+    ? AI_JOB_TYPES.split(',').map(type => type.trim()).filter(type => '' !== type).map(type => {
+        if (!isAiJobType(type) || getAiJobTypeEngine(type) !== engine) {
+            throw new Error(`AI_JOB_TYPES: "${type}" is not a job type of ${engine}. Expected some of: ${getEngineAiJobTypes(engine).join(', ')}`);
+        }
 
-    socket = createConnection({
-        host: SERVER_HOST,
-        port: +SERVER_PORT,
-        keepAlive: true,
-        keepAliveInitialDelay: 1000,
-        timeout: 5000, // Only used for connection timeout. Ignore timeouts if socket is connected.
+        if (!IMPLEMENTED_AI_JOB_TYPES.includes(type)) {
+            throw new Error(`AI_JOB_TYPES: "${type}" is not yet implemented by this worker`);
+        }
+
+        return type;
+    })
+    : getEngineDefaultAiJobTypes(engine)
+;
+
+if (0 === jobTypes.length) {
+    throw new Error('AI_JOB_TYPES must contain at least one job type, or be empty to process default job types of engine');
+}
+
+const hexUrl = HEX_URL.replace(/\/+$/, '');
+
+/**
+ * Identifies this worker process, a same key can be used by multiple workers.
+ */
+const workerId = randomUUID();
+
+/**
+ * Delay before retrying when server is unreachable, doubled on each consecutive error.
+ */
+const MIN_BACKOFF_MS = 1000;
+const MAX_BACKOFF_MS = 60_000;
+
+/**
+ * Key is invalid or revoked, worker must stop.
+ */
+class UnauthorizedError extends Error {}
+
+/**
+ * Worker does not own the job anymore (lock expired and job given to another worker).
+ */
+class JobNotOwnedError extends Error {}
+
+let stopping = false;
+let currentJob: null | ReservedJob = null;
+const stopController = new AbortController();
+
+const api = async (path: string, body: object, signal?: AbortSignal): Promise<Response> => {
+    const response = await fetch(`${hexUrl}/api/ai-workers${path}`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${AI_WORKER_KEY}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        },
+        body: JSON.stringify({ workerId, ...body }),
+        signal,
     });
 
-    socket
-        .on('connect', () => {
-            logger.info('Connected. Processing jobs.');
+    if (401 === response.status || 403 === response.status) {
+        throw new UnauthorizedError(await response.text());
+    }
 
-            if (null === socket) {
-                logger.error('No socket, cannot configure');
-                return;
-            }
+    if (409 === response.status) {
+        throw new JobNotOwnedError(await response.text());
+    }
 
-            const { PEER_CONFIG_SECONDARY } = process.env;
+    return response;
+};
 
-            let secondary = false;
+/**
+ * @returns Next job, or null if there is no job yet.
+ */
+const fetchNextJob = async (): Promise<null | ReservedJob> => {
+    const response = await api('/jobs/next', { types: jobTypes }, stopController.signal);
 
-            if (undefined !== PEER_CONFIG_SECONDARY) {
-                secondary = '1' === PEER_CONFIG_SECONDARY || 'true' === PEER_CONFIG_SECONDARY;
-            }
+    if (204 === response.status) {
+        return null;
+    }
 
-            if (secondary) {
-                logger.debug('Set secondary', { secondary });
-                socket.write('set_secondary ' + JSON.stringify(secondary));
-            }
-        })
+    if (!response.ok) {
+        throw new Error(`Server responded ${response.status}: ${await response.text()}`);
+    }
 
-        .on('data', async data => {
-            const string = data.toString();
-            logger.debug(`Data received: ${string}`);
-            const matches = string.match(/^job ([^ ]+) (.+)$/);
+    return typia.assert<ReservedJob>(await response.json());
+};
 
-            if (!matches) {
-                logger.warning('Received an unknwown command, ignore it', { command: string });
-                return;
-            }
-
-            if (null === socket) {
-                logger.error('No socket, cannot process data');
-                return;
-            }
-
-            const [, token, jobDataJson] = matches;
-            const task: WorkerInput = typia.assert<WorkerInput>(JSON.parse(jobDataJson));
-            let output: WorkerOutput;
-
-            logger.debug('Received a job. Processing it...', { type: task.type });
-
-            try {
-                switch (task.type) {
-                    case 'calculate-move':
-                        output = {
-                            success: true,
-                            data: await aiProcessJob(task.data),
-                        };
-                        break;
-
-                    case 'analyze-move':
-                        output = {
-                            success: true,
-                            data: await analyzeMove(task.data),
-                        };
-                        break;
-
-                    case 'analyze-position':
-                        output = {
-                            success: true,
-                            data: await analyzePosition(task.data),
-                        };
-                        break;
-                }
-
-                logger.info('Job processed successfully, sending back to peer server.');
-            } catch (error) {
-                if (!(error instanceof Error)) {
-                    throw error;
-                }
-
-                logger.error('Error while processing job by AI', {
-                    name: error.name,
-                    msg: error.message,
-                    stack: error.stack,
-                });
-
-                output = {
-                    success: false,
-                    error: error.message,
-                };
-            }
-
-            socket.write(`job_result ${token} ${JSON.stringify(output)}`);
-        })
-
-        .on('error', error => {
-            logger.error('Error... Closing connection', { error });
-
-            if (null === socket) {
-                return;
-            }
-
-            socket.end();
-            socket.destroy();
-            socket = null;
-        })
-
-        .on('close', async () => {
-            logger.notice('Connection to server closed, trying to reconnect...');
-
-            if (null !== socket) {
-                socket.destroy();
-                socket = null;
-            }
-
-            await setTimeout(2000);
-            connectAndProcess();
-        })
-
-        .on('timeout', async () => {
-            if (null !== socket) {
-                if (!socket.connecting) {
+/**
+ * Sends heartbeats while job is processing.
+ * Calls onNotOwned if server says job has been given to another worker.
+ */
+const startHeartbeats = (reservedJob: ReservedJob, onNotOwned: () => void): () => void => {
+    const interval = setInterval(() => {
+        api(`/jobs/${reservedJob.jobId}/heartbeat`, { token: reservedJob.token })
+            .catch(e => {
+                if (e instanceof JobNotOwnedError) {
+                    onNotOwned();
                     return;
                 }
 
-                socket.destroy();
-                socket = null;
+                logger.warning('Could not send heartbeat', { jobId: reservedJob.jobId, message: e.message });
+            })
+        ;
+    }, HEARTBEAT_MS);
+
+    return () => clearInterval(interval);
+};
+
+const processJob = async (engineWorker: EngineWorker, reservedJob: ReservedJob): Promise<void> => {
+    const { jobId, token, task } = reservedJob;
+    let abandoned = false;
+
+    logger.info('Processing job', { jobId, type: task.type });
+
+    const stopHeartbeats = startHeartbeats(reservedJob, () => {
+        logger.notice('Job has been given to another worker, abandoning it', { jobId });
+        abandoned = true;
+    });
+
+    let path: string;
+    let body: object;
+
+    try {
+        const result = await engineWorker.process(task);
+
+        path = `/jobs/${jobId}/result`;
+        body = { token, result };
+    } catch (e) {
+        const error = e instanceof Error ? e : new Error(String(e));
+
+        // Engine crashed or timed out: another worker may process it. Else task itself is not processable.
+        const retryable = error instanceof GTPEngineError;
+
+        logger.error('Error while processing job', { jobId, type: task.type, message: error.message, retryable });
+
+        path = `/jobs/${jobId}/fail`;
+        body = { token, error: error.message.substring(0, 1000), retryable };
+    } finally {
+        stopHeartbeats();
+    }
+
+    if (abandoned) {
+        return;
+    }
+
+    try {
+        const response = await api(path, body);
+
+        if (!response.ok) {
+            logger.error('Server refused job result', { jobId, status: response.status, message: await response.text() });
+            return;
+        }
+
+        logger.info('Job done', { jobId });
+    } catch (e) {
+        if (e instanceof JobNotOwnedError) {
+            logger.notice('Job has been given to another worker, result ignored', { jobId });
+            return;
+        }
+
+        throw e;
+    }
+};
+
+const run = async (engineWorker: EngineWorker): Promise<void> => {
+    let backoffMs = MIN_BACKOFF_MS;
+
+    while (!stopping) {
+        try {
+            currentJob = await fetchNextJob();
+
+            if (null !== currentJob) {
+                await processJob(engineWorker, currentJob);
+                currentJob = null;
             }
 
-            logger.notice('Timeout while connecting to server, trying to reconnect...');
+            backoffMs = MIN_BACKOFF_MS;
+        } catch (e) {
+            currentJob = null;
 
-            await setTimeout(2000);
-            connectAndProcess();
-        })
+            if (stopping) {
+                break;
+            }
+
+            if (e instanceof UnauthorizedError) {
+                logger.crit('AI worker key refused by server, stopping. Is the key valid, or has it been revoked?', { message: e.message });
+                process.exit(1);
+            }
+
+            logger.warning(`Server error, retrying in ${backoffMs / 1000}s`, { message: e instanceof Error ? e.message : String(e) });
+
+            await setTimeout(backoffMs);
+            backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+        }
+    }
+
+    logger.info('Worker stopped.');
+    process.exit(0);
+};
+
+/**
+ * First signal: finish current job then stop.
+ * Second signal: give back current job to server so another worker takes it, then stop.
+ */
+const onStopSignal = (): void => {
+    if (!stopping) {
+        stopping = true;
+        stopController.abort();
+
+        if (null !== currentJob) {
+            logger.info('Stopping after current job. Send signal again to stop now.');
+        }
+
+        return;
+    }
+
+    const job = currentJob;
+
+    if (null === job) {
+        process.exit(0);
+    }
+
+    logger.info('Giving back current job to server...');
+
+    api(`/jobs/${job.jobId}/fail`, { token: job.token, error: 'Worker stopped', retryable: true })
+        .catch(e => logger.warning('Could not give back job', { message: e.message }))
+        .finally(() => process.exit(0))
     ;
 };
 
+process.on('SIGINT', onStopSignal);
+process.on('SIGTERM', onStopSignal);
+
 (async () => {
-    logger.info('Waiting for Mohex to be ready...');
-    logger.info(await mohex.version());
-    logger.info('Mohex ready');
+    logger.info(`Starting ${engine} worker...`);
 
-    logger.info('Waiting for Katahex to be ready...');
-    logger.info(await katahex.version());
-    logger.info('Katahex ready');
+    const engineWorker = await loadEngineWorker(engine);
 
-    logger.info('Connecting to server...');
-    connectAndProcess();
+    logger.info(`Engine ready: ${await engineWorker.version()}`);
+    logger.info(`Pulling jobs ${jobTypes.join(', ')} from ${hexUrl}, worker id: ${workerId}`);
+
+    await run(engineWorker);
 })();

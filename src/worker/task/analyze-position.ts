@@ -1,4 +1,4 @@
-import { AnalyzePositionInput, AnalyzePositionOutput } from '../../shared/model/AnalyzePosition';
+import { AnalyzePositionInput, AnalyzePositionOutput } from '../../shared/protocol';
 import { katahex } from './calculate-move/katahex';
 import { StandardizedPosition } from '../../shared/StandardizedPosition';
 

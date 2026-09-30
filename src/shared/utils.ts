@@ -1,5 +1,5 @@
 import Move from './Move';
-import { MoveAndValue } from './model/AnalyzeGame';
+import { MoveAndValue } from './protocol';
 
 export const takeKataRawNBestMoves = (values: number[][], nBest: number): MoveAndValue[] => {
     const bestMoves: MoveAndValue[] = [];
@@ -47,3 +47,13 @@ export const takeKataRawMove = (move: string, values: number[][]): MoveAndValue 
         value: values[row][col],
     };
 };
+
+export const mirrorMoveAndValue = (moveAndValue: MoveAndValue): MoveAndValue => ({
+    move: Move.mirror(moveAndValue.move),
+    value: moveAndValue.value, // not mirrored because move value stays same
+    whiteWin: undefined === moveAndValue.whiteWin ? undefined : 1 - moveAndValue.whiteWin,
+});
+
+export const mirrorMoveAndValues = (moveAndValues: MoveAndValue[]): MoveAndValue[] => moveAndValues
+    .map(moveAndValue => mirrorMoveAndValue(moveAndValue))
+;

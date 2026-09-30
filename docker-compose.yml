@@ -1,50 +1,34 @@
-version: '3'
+# Run workers connected to a PlayHex server.
+# Set AI_WORKER_KEY (and optionally HEX_URL) in .env or in your shell, then:
+#
+#   docker compose up katahex
+#   docker compose up --scale katahex=3 katahex mohex
 
 services:
 
-  server:
-    image: node:21-alpine
-    volumes:
-      - .:/app
-    command: sh -c "cd /app && yarn server"
-    ports:
-      - 8088:8088
-    healthcheck:
-      test: rm -fr ping && wget server:8088/ping
-      interval: 1s
-      timeout: 2s
-      retries: 60
-    depends_on:
-      redis:
-        condition: service_healthy
+  katahex:
+    image: playhex/worker-katahex
+    build:
+      context: .
+      target: katahex
+    environment: &worker-environment
+      HEX_URL: ${HEX_URL:-https://playhex.org}
+      AI_WORKER_KEY: ${AI_WORKER_KEY:?AI_WORKER_KEY must be set, ask a key to PlayHex admins}
+      AI_JOB_TYPES: ${AI_JOB_TYPES:-}
+    restart: unless-stopped
 
-  peer-server:
-    image: node:21-alpine
-    volumes:
-      - .:/app
-    command: sh -c "cd /app && yarn peer-server"
-    ports:
-      - 8089:8089
-    healthcheck:
-      test: rm -fr ping && wget peer-server:8090/ping
-      interval: 1s
-      timeout: 2s
-      retries: 60
-    depends_on:
-      redis:
-        condition: service_healthy
+  mohex:
+    image: playhex/worker-mohex
+    build:
+      context: .
+      target: mohex
+    environment: *worker-environment
+    restart: unless-stopped
 
-  worker:
-    image: alcalyn/hex-distributed-ai-worker:latest
-    build: ./src/worker
-    volumes:
-      - .:/app
-    command: sh -c "cd /app && yarn worker"
-
-  redis:
-    image: redis:7
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 1s
-      timeout: 2s
-      retries: 30
+  davies:
+    image: playhex/worker-davies
+    build:
+      context: .
+      target: davies
+    environment: *worker-environment
+    restart: unless-stopped

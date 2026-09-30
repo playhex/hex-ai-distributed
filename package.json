@@ -1,33 +1,25 @@
 {
   "name": "hex-ai-distributed",
   "version": "1.0.0",
-  "description": "Hex AI distributed. Send move calculation to peers.",
+  "description": "Hex AI workers. Pull AI jobs (bot moves, game analyzes) from PlayHex and process them with Katahex, Mohex or Davies.",
   "author": "Julien Maulny",
   "license": "AGPL-3.0",
   "scripts": {
     "test": "mocha src/**/test/**/*.ts -n import=ts-node/esm --extension ts",
-    "server": "nodemon src/server/index.ts",
-    "peer-server": "nodemon src/peer-server/index.ts",
     "worker": "nodemon src/worker/index.ts",
     "build": "rm -fr dist/ && tsc && cp .env* dist/",
-    "generate": "yarn typia generate --input src/shared/model --output src/shared/typia-generated",
-    "prepare": "ts-patch install && typia patch",
-    "obliterate": "yarn ts-node obliterate.ts"
+    "prepare": "ts-patch install && typia patch"
   },
   "dependencies": {
-    "@bull-board/express": "^5.10.2",
-    "@influxdata/influxdb3-client": "^0.7.0",
-    "bullmq": "^4.15.2",
+    "davies-hex-ai": "^1.2.7",
     "dotenv": "^16.3.1",
-    "express": "^4.18.2",
     "p-queue": "<=6.6.2",
-    "tiny-typed-emitter": "^2.1.0",
     "typia": "^5.3.5",
     "winston": "^3.11.0"
   },
   "devDependencies": {
-    "@types/express": "^4.17.21",
     "@types/mocha": "^10.0.6",
+    "@types/node": "22",
     "mocha": "^10.3.0",
     "nodemon": "^3.0.2",
     "ts-node": "^10.9.2",

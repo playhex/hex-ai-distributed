@@ -1,0 +1,7 @@
+node_modules
+dist
+gtp_logs
+default.log
+.env
+.git
+docs

@@ -1,6 +1,6 @@
-import { AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue, mirrorMoveAndValue, mirrorMoveAndValues } from '../../shared/model/AnalyzeGame';
+import { AnalyzeMoveInput, AnalyzeMoveOutput, MoveAndValue } from '../../shared/protocol';
 import { katahex } from './calculate-move/katahex';
-import { takeKataRawMove, takeKataRawNBestMoves } from '../../shared/utils';
+import { mirrorMoveAndValue, mirrorMoveAndValues, takeKataRawMove, takeKataRawNBestMoves } from '../../shared/utils';
 import Move from '../../shared/Move';
 import { StandardizedPosition } from '../../shared/StandardizedPosition';
 

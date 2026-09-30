@@ -1,115 +1,173 @@
-# Hex AI distributed
+# Hex AI workers
 
-API that process Hex move by sending move calculation to peers.
+Workers computing Hex AI tasks for [PlayHex](https://playhex.org): bot moves, game analyses, Hexplorer position analyses.
 
-## Install
-
-Clone this repo, then:
+Each worker runs one engine (Katahex, Mohex or Davies), pulls jobs from a PlayHex server over HTTPS, and sends results back.
+Run more workers to process more jobs, from any machine: no port to open, no VPN.
 
 ```
+PlayHex server, one queue per job type          <-- HTTPS long-polling, api key --
+
+  [katahex-intuition-move]              ─┐
+  [katahex-intuition-analyze-position]   ├──  worker katahex (x N)
+  [katahex-intuition-analyze-move]      ─┘
+  [katahex-mcts-move]                   ─┐
+  [katahex-mcts-analyze-position]        ├··  only workers with AI_JOB_TYPES including them
+  [katahex-mcts-analyze-move]           ─┘
+  [mohex]                               ────  worker mohex   (x N)
+  [davies]                              ────  worker davies  (x N)
+```
+
+A worker processes default job types of its engine, or the ones listed in `AI_JOB_TYPES`.
+Tree search job types (`katahex-mcts-*`) require more computing power: they are not processed by default,
+list them explicitly on a powerful computer:
+
+``` bash
+docker run --rm -e AI_WORKER_KEY=<key> -e AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-intuition-analyze-move playhex/worker-katahex
+```
+
+`katahex-mcts-analyze-position` and `katahex-mcts-analyze-move` are not yet implemented.
+
+Server gives jobs by job type priority (bot moves, then Hexplorer positions, then game analyzes), then oldest first.
+A job type without any worker does not block other job types.
+
+## Contribute computing power
+
+1. Ask PlayHex admins for a key. Your keys are shown in your PlayHex settings, "AI workers" panel.
+2. Run a worker with Docker:
+
+``` bash
+docker run --rm -e AI_WORKER_KEY=<key> playhex/worker-katahex
+```
+
+Or with docker compose, from this repo:
+
+``` bash
+echo "AI_WORKER_KEY=<key>" > .env
+
+docker compose up katahex
+
+# Run 3 katahex workers and a mohex worker
+docker compose up --scale katahex=3 katahex mohex
+```
+
+Stop a worker with Ctrl+C: it finishes its current job before stopping.
+Press Ctrl+C again to stop immediately, the job is then given to another worker.
+
+A killed worker is fine too: server gives its job to another worker after 30 seconds without heartbeat.
+
+## Development
+
+Requires Node 22.
+
+``` bash
 yarn install
+cp .env.dist .env
 ```
 
-This library requires a Redis instance.
-Configure your redis url in an empty `.env` file:
+In `.env`, set the engine to run, the hex server url, and a key.
+Create a key from the hex repo with `pnpm hex ai-worker-key:create <player id or slug>`.
 
-```
-REDIS_URL=0.0.0.0:6379
-```
-
-With Docker, you can quickly start a local instance of redis with:
+Then run a worker:
 
 ``` bash
-docker run -p 6379:6379 redis
-```
-
-Then run server and/or a worker in separate processes:
-
-```
-yarn peer-server
-yarn server
 yarn worker
+
+# Or override engine
+ENGINE=mohex yarn worker
 ```
 
-## Build for production
+Engines binaries must be installed locally (see `MOHEX_BIN` and `KATAHEX_BIN` in `.env`),
+except Davies which is a javascript library.
 
-Build typescript files with:
-
-```
-yarn build
-```
-
-Then run server and/or worker in separate processes:
-
-```
-node dist/src/peer-server
-node dist/src/server
-node dist/src/worker
-```
-
-Or run these with pm2.
-
-## With docker
+Run tests with:
 
 ``` bash
-cp .env.docker .env
-
-docker compose up
+yarn test
 ```
 
-- Access bull UI: <http://0.0.0.0:8088/bull>
+## Build and publish Docker images
 
-- To run only server or worker:
+There is one image per engine, built from the same `Dockerfile` with a different target:
+
+| Engine  | Target    | Image                    |
+|---------|-----------|--------------------------|
+| Katahex | `katahex` | `playhex/worker-katahex` |
+| Mohex   | `mohex`   | `playhex/worker-mohex`   |
+| Davies  | `davies`  | `playhex/worker-davies`  |
+
+Engines versions are pinned in `Dockerfile` (`MOHEX_COMMIT`, `KATAHEX_COMMIT`):
+a different version could change bots strength.
+
+Katahex image requires the model file in `katahex/` folder, see [Katahex](#katahex) below.
+
+### Build
 
 ``` bash
-# only server
-docker compose up redis server
+docker build --target katahex -t playhex/worker-katahex .
+docker build --target mohex -t playhex/worker-mohex .
+docker build --target davies -t playhex/worker-davies .
 
-# only worker
-docker compose up worker
+# Or build all
+docker compose build
 ```
 
-- To test with multiple workers:
+First build compiles Mohex and Katahex, it takes several minutes. Next builds use Docker cache.
+
+Check the images before publishing:
 
 ``` bash
-docker compose up --scale worker=2
+# Engines start and answer
+printf 'name\nversion\nboardsize 5\ngenmove b\nquit\n' | docker run --rm -i playhex/worker-mohex mohex
+printf 'name\nversion\nquit\n' | docker run --rm -i playhex/worker-katahex katahex gtp -config /app/katahex/config.cfg -model /app/katahex/katahex_model_20220618.bin.gz
+
+# Workers connect to a local hex server and process jobs
+docker run --rm --network host -e HEX_URL=http://localhost:3000 -e AI_WORKER_KEY=<key> playhex/worker-katahex
 ```
 
-- To empty all redis queues
+### Publish
+
+Log in to Docker Hub with an account allowed to push to the `playhex` organization:
 
 ``` bash
-docker compose run server sh -c "cd /app && yarn obliterate"
+docker login
 ```
 
-## API
+Tag each image with a version (here the git commit) and `latest`, then push both tags:
 
-Server can accept this request in order to process an AI move calculation through workers:
+``` bash
+VERSION=$(git rev-parse --short HEAD)
 
-```
-POST http://0.0.0.0:8088/calculate-move
-Content-Type: application/json
-
-{
-    "game": {
-        "size": 11,
-        "currentPlayer": "black",
-        "movesHistory": "e4 d6",
-        "swapRule": false
-    },
-    "ai": {
-        "engine": "mohex",
-        "maxGames": 20
-    }
-}
+for ENGINE in katahex mohex davies; do
+    docker build --target $ENGINE -t playhex/worker-$ENGINE:$VERSION -t playhex/worker-$ENGINE:latest .
+    docker push playhex/worker-$ENGINE:$VERSION
+    docker push playhex/worker-$ENGINE:latest
+done
 ```
 
-Result:
+Contributors get the new version with `docker pull playhex/worker-katahex` (or `docker compose pull`), then restart their worker.
+To rollback, push again an older version as `latest`:
 
-```
-f7
+``` bash
+docker pull playhex/worker-katahex:<old version>
+docker tag playhex/worker-katahex:<old version> playhex/worker-katahex:latest
+docker push playhex/worker-katahex:latest
 ```
 
-See all the possible HTTP requests in `http/` folder. We can use HttpYac and IDE plugins to run api call directly from these files.
+### Publish for ARM (Apple Silicon, Raspberry Pi...)
+
+Images above are built for your machine architecture (usually `linux/amd64`).
+They still run on ARM computers through emulation, but slowly.
+To publish multi-architecture images, use buildx (building ARM on amd64 is emulated, so it takes a long time):
+
+``` bash
+docker buildx create --use --name playhex-builder
+
+for ENGINE in katahex mohex davies; do
+    docker buildx build --platform linux/amd64,linux/arm64 --target $ENGINE \
+        -t playhex/worker-$ENGINE:$VERSION -t playhex/worker-$ENGINE:latest --push .
+done
+```
 
 ## Katahex
 
@@ -119,28 +177,20 @@ To use Katahex, you first need to install a pre-trained model, currently downloa
 
 See <https://github.com/selinger/katahex#running>.
 
-Then place the `.bin.gz` model file in this repo, in `katahex/` folder to make it available in Docker.
+Then place the `.bin.gz` model file in `katahex/` folder, it is required to build the katahex image.
 
-## Other usages
-
-If you just want to use preinstalled Hex AI engines in docker using command line,
-you can run and enter in the worker container with:
+## Use engines from command line
 
 ``` bash
-docker compose run worker bash
+docker run --rm -it playhex/worker-mohex mohex
 
-# Use Mohex
-mohex
-
-# Use Katahex
-katahex gtp -config /app/katahex/config.cfg -model /app/katahex/katahex_model_20220618.bin.gz
+docker run --rm -it playhex/worker-katahex katahex gtp -config /app/katahex/config.cfg -model /app/katahex/katahex_model_20220618.bin.gz
 ```
 
 Example:
 
 ```
-$> docker compose run worker bash
-$> mohex
+$> docker run --rm -it playhex/worker-mohex mohex
 MoHex 2.0.CMake Dec 14 2023
 Copyright (C) 2007-2012 by the authors of the Benzene project.
 ...
@@ -162,231 +212,13 @@ showboard
 
 ```
 
-## Architecture
+## Protocol
 
-- Server (express)
+See `src/shared/protocol.ts`, copied from hex repo (`src/server/ai-jobs/protocol.ts`).
 
-Can request an API move, or game analysis.
+- `POST /api/ai-workers/jobs/next`: get next job among job types sent in `types`. Server holds the request up to 25 seconds when there is no job, then responds 204.
+- `POST /api/ai-workers/jobs/:jobId/heartbeat`: every 10 seconds while processing a job, else job is given to another worker.
+- `POST /api/ai-workers/jobs/:jobId/result`: send result. Server validates it (legal move...).
+- `POST /api/ai-workers/jobs/:jobId/fail`: task could not be processed. `retryable: true` to give it to another worker.
 
-Will create a job and queue it (redis).
-
-Once job is done, send result back to client.
-
-```
-client <-> API <-> bullmq/redis
-```
-
-- Peer server (NodeJs.net)
-
-An open socket, workers will connect to this socket.
-Keep all workers online, knows which one is available or working.
-
-Will dequeue jobs to send to next available worker.
-
-```
-bullmq/redis <-> Peer server <-> workers
-```
-
-- Worker (NodeJs.net)
-
-Spawn Hex AI engines, connect to peer server and wait for a job.
-
-Will compute it, and send result back to peer server.
-
-```
-Peer server <-> worker <-> mohex/katahex
-```
-
-### General workflow
-
-```
-ApiInput        ApiOutput
-    v               ^
-        API
-    v               ^
-JobInput        JobOutput
-    v               ^
-        redis
-
-        ...
-
-        redis
-    v               ^
-JobInput        JobOutput
-    v               ^
-        Peer server
-    v               ^
-WorkerInput     WorkerOutput
-    v               ^
-        Worker
-```
-
-Output types are ResultType<T>
-
-API then returns either 200 with data, or 400 with error message.
-
-- Calculate move
-
-Compute a move from AI. Can choose AI and level.
-
-```
-CalculateMoveInput      CalculateMoveOutput
-    v                           ^
-        API
-    v                           ^
-CalculateMoveInput      CalculateMoveOutput
-    v                           ^
-        redis
-
-        ...
-
-        redis
-    v                           ^
-CalculateMoveInput      CalculateMoveOutput
-    v                           ^
-        Peer server
-    v                           ^
-CalculateMoveInput      CalculateMoveOutput
-    v                           ^
-        Worker
-```
-
-- Analyze game
-
-Uses an AI (katahex) to analyze game moves (best moves, blunders...).
-
-```
-AnalyzeGameInput        AnalyzeGameOutput
-    v                           ^
-        API
-    v                           ^
-AnalyzeGameInput        AnalyzeGameOutput
-> AnalyzeMoveInput[]    > AnalyzeMoveOutput[]
-    v                           ^
-        redis
-
-        ...
-
-        redis
-    v                           ^
-AnalyzeMoveInput        AnalyzeMoveOutput
-    v                           ^
-        Peer server
-    v                           ^
-AnalyzeMoveInput        AnalyzeMoveOutput
-    v                           ^
-        Worker
-```
-
-Uses bullmq job children feature.
-
-`AnalyzeGameInput` is kept as parent job, creates multiple `AnalyzeMoveInput` jobs to send to workers.
-
-Once every `AnalyzeMoveInput` is done, will be "reconsolided" back to `AnalyzeGameOutput` which is sent to client.
-
-### Message queues
-
-- Queue `worker_tasks`
-
-Contains WorkerTask jobs. Can be calculate move, or analyze a position.
-
-Analyze a position (AnalyzeMove) have lower priority.
-
-
-- Queue `analyzes`
-
-Contains AnalyzeGame jobs. Every AnalyzeGame job is the parent of multiple AnalyzeMove jobs in the `worker_tasks` queue.
-
-## Build worker standalone docker image
-
-To run a worker from an image with all inside (source code and katahex model),
-
-- check there is a model in `./katahex/` folder, and is the one configured in `.env`
-
-- then run:
-
-``` bash
-# If base image changed (src/worker/Dockerfile)
-docker build -f src/worker/Dockerfile -t alcalyn/hex-distributed-ai-worker:latest .
-docker push alcalyn/hex-distributed-ai-worker:latest
-
-# build standalone image (add --no-cache if base image changed)
-docker build -f src/worker/Dockerfile.standalone -t alcalyn/hex-distributed-ai-worker:standalone .
-
-# publish
-docker push alcalyn/hex-distributed-ai-worker:standalone
-```
-
-## Start a worker
-
-Pull or update worker:
-
-``` bash
-docker pull alcalyn/hex-distributed-ai-worker:standalone
-```
-
-- start a worker with:
-
-``` bash
-docker run -it alcalyn/hex-distributed-ai-worker:standalone
-
-# (ctrl + C to stop it)
-```
-
-- start it in background:
-
-``` bash
-docker run -d --name hex-worker alcalyn/hex-distributed-ai-worker:standalone
-
-# and stop it with:
-docker rm -f hex-worker
-
-# or show logs with:
-docker logs -ft hex-worker
-```
-
-- run and enter in the container without running a worker:
-
-``` bash
-docker run -it alcalyn/hex-distributed-ai-worker:standalone bash
-```
-
-## Simulate stale connection between peer and server
-
-Peer keep a long running tcp connection to peer-server.
-
-There is chance that peer lose connection without having time to gracefully
-closing the connection
-(wifi down, unpluged, laptop closed without exiting worker).
-
-This makes the connection stale, peer-server think the worker is available
-but is not, and when sending him a job, he lose time before re-sending job to another peer.
-
-This should be handled, peer-server must keep connections alive, and disconnect stale peers.
-
-For developments, to simulate losing connection, with docker:
-
-``` bash
-# get network name (the name is this project folder name by default)
-docker network ls
-
-# get worker container id (the name is something like alcalyn/hex-distributed-ai-worker:latest)
-docker ps
-
-# disconnect
-docker network disconnect hex-ai-distributed_default ead82e1f53e8
-```
-
-Then check how long the server take to remove this peer:
-
-`GET /status`
-
-Or send him a task, and check how long it takes to re-attribute the job to another available peer.
-
-For this, you can run 2 workers with `docker compose up --scale worker=2`.
-
-To restart the test, you need to reconnect worker to the network:
-
-``` bash
-docker network connect hex-ai-distributed_default ead82e1f53e8
-```
+Server responds 409 if job has been given to another worker meanwhile, and 401 if key is invalid or revoked.

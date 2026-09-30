@@ -1,5 +1,5 @@
 import logger from '../../../shared/logger';
-import { CalculateMoveInput } from '../../../shared/model/CalculateMove';
+import { MohexMoveInput } from '../../../shared/protocol';
 import Mohex from '../../mohex-cli/Mohex';
 import Move from '../../../shared/Move';
 import { StandardizedPosition } from '../../../shared/StandardizedPosition';
@@ -36,30 +36,17 @@ showboard
  *
  * If there is a swap piece move, drop it, mirror first move, and invert colors.
  */
-export const processJobMohex = async (jobData: CalculateMoveInput): Promise<string> => {
+export const processJobMohex = async (jobData: MohexMoveInput): Promise<string> => {
     const { size } = jobData.game;
 
     if (size < 1 || size > 14) {
         throw new Error('Mohex can play only on board with size in [1, 14]');
     }
 
-    let { movesHistory, swapRule } = jobData.game;
-
-    if (!jobData.ai) {
-        throw new Error('This job is not for an ai');
-    }
-
-    const { engine } = jobData.ai;
-
-    if ('mohex' !== engine) {
-        throw new Error('Only supports mohex engine, got: ' + engine);
-    }
-
-    const { maxGames } = jobData.ai;
+    const { movesHistory, swapRule } = jobData.game;
+    const { maxGames } = jobData;
     const standardizedPosition = StandardizedPosition.fromMovesHistory(movesHistory);
     const { mirrored, swapStillAllowed, blackCells, whiteCells, currentPlayer } = standardizedPosition;
-
-    console.log(movesHistory, standardizedPosition);
 
     if (currentPlayer !== jobData.game.currentPlayer) {
         throw new Error(`currentPlayer is set to ${jobData.game.currentPlayer} but from moves history, it seems to be ${currentPlayer} to play`);
