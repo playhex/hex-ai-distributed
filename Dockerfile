@@ -44,7 +44,7 @@ FROM engine-build AS mohex-build
 
 RUN apt-get install -y libboost-all-dev libdb-dev
 
-# Fork with 14x14 support. Pinned: a different version could change bots strength.
+# Fork with 14x14 support. Pinned to the last working commit: more recent ones are buggy.
 ARG MOHEX_COMMIT=9f247ad72cc0cd23dabdc9f62bd40b0721ebcb35
 
 RUN cd /tmp \
@@ -64,13 +64,9 @@ FROM engine-build AS katahex-build
 
 RUN apt-get install -y libeigen3-dev libzip-dev zlib1g-dev
 
-# From https://github.com/selinger/katahex. Pinned: a different version could change bots strength.
-ARG KATAHEX_COMMIT=41a65784fac932046eb3350662d4f1eca1b810b3
-
 RUN cd /tmp \
     && git clone https://github.com/selinger/katahex \
     && cd katahex/ \
-    && git checkout ${KATAHEX_COMMIT} \
     && mkdir build \
     && cd build \
     && cmake -DUSE_BACKEND=EIGEN -DMAX_BOARD_LEN=32 ../cpp \

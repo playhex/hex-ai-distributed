@@ -7,13 +7,14 @@ export class TaskNotSupportedError extends Error {}
 
 /**
  * Job types this worker knows how to process.
- * Other job types (i.e katahex-mcts-analyze-*) are defined in protocol but not yet implemented.
  */
 export const IMPLEMENTED_AI_JOB_TYPES: readonly AiJobType[] = [
     'katahex-intuition-move',
     'katahex-mcts-move',
     'katahex-intuition-analyze-position',
+    'katahex-mcts-analyze-position',
     'katahex-intuition-analyze-move',
+    'katahex-mcts-analyze-move',
     'mohex',
     'davies',
 ];
@@ -37,15 +38,20 @@ export const loadEngineWorker = async (engine: Engine): Promise<EngineWorker> =>
             const { katahex, processJobKatahex } = await import('./task/calculate-move/katahex');
             const { analyzeMove } = await import('./task/analyze-move');
             const { analyzePosition } = await import('./task/analyze-position');
+            const { processJobKatahexMcts } = await import('./task/mcts/mcts-move');
+            const { analyzeMoveMcts } = await import('./task/mcts/mcts-analyze-move');
+            const { analyzePositionMcts } = await import('./task/mcts/mcts-analyze-position');
 
             return {
                 version: () => katahex.version(),
                 process: async task => {
                     switch (task.type) {
-                        case 'katahex-intuition-move': return await processJobKatahex(task.data, false);
-                        case 'katahex-mcts-move': return await processJobKatahex(task.data, true);
+                        case 'katahex-intuition-move': return await processJobKatahex(task.data);
+                        case 'katahex-mcts-move': return await processJobKatahexMcts(task.data);
                         case 'katahex-intuition-analyze-move': return await analyzeMove(task.data);
+                        case 'katahex-mcts-analyze-move': return await analyzeMoveMcts(task.data);
                         case 'katahex-intuition-analyze-position': return await analyzePosition(task.data);
+                        case 'katahex-mcts-analyze-position': return await analyzePositionMcts(task.data);
                     }
 
                     return notSupported(engine, task);

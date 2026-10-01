@@ -13,10 +13,10 @@ if (!KATAHEX_BIN) {
 export const katahex = new Katahex(KATAHEX_BIN);
 
 /**
- * @param treeSearch Whether Katahex uses tree search (harder),
- *                   or only use raw neural network output (easier).
+ * Katahex move from raw neural network output, without tree search.
+ * See processJobKatahexMcts() for tree search.
  */
-export const processJobKatahex = async (jobData: KatahexMoveInput, treeSearch: boolean): Promise<string> => {
+export const processJobKatahex = async (jobData: KatahexMoveInput): Promise<string> => {
     const { size } = jobData.game;
     const { movesHistory, swapRule } = jobData.game;
     const standardizedPosition = StandardizedPosition.fromMovesHistory(movesHistory);
@@ -27,7 +27,7 @@ export const processJobKatahex = async (jobData: KatahexMoveInput, treeSearch: b
 
     standardizedPosition.setBlackToPlay();
 
-    logger.debug(`Katahex received job:\nuse tree search: ${treeSearch ? 'yes' : 'no'}\nparam_game allow_swap ${swapRule ? '1' : '0'}\nboardsize ${size}\nplay-game ${movesHistory}\ngenmove ${standardizedPosition.currentPlayer}\nshowboard`);
+    logger.debug(`Katahex received job:\nparam_game allow_swap ${swapRule ? '1' : '0'}\nboardsize ${size}\nplay-game ${movesHistory}\ngenmove ${standardizedPosition.currentPlayer}\nshowboard`);
 
     await katahex.setBoardSize(size);
     await katahex.sendCommand('clear_board');
@@ -38,10 +38,7 @@ export const processJobKatahex = async (jobData: KatahexMoveInput, treeSearch: b
 
     logger.debug(await katahex.showboard());
 
-    let generatedMove = treeSearch
-        ? await katahex.getBestNonPassingMoveFromTreeSearch('black')
-        : await katahex.getBestMoveFromNeuralNetworkOutput()
-    ;
+    let generatedMove = await katahex.getBestMoveFromNeuralNetworkOutput();
 
     logger.debug('generated move, not mirrored: ' + generatedMove);
 

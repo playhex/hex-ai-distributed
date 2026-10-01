@@ -13,7 +13,7 @@ services:
       target: katahex
     environment: &worker-environment
       HEX_URL: ${HEX_URL:-https://playhex.org}
-      AI_WORKER_KEY: ${AI_WORKER_KEY:?AI_WORKER_KEY must be set, ask a key to PlayHex admins}
+      AI_WORKER_KEY: ${AI_WORKER_KEY:-}
       AI_JOB_TYPES: ${AI_JOB_TYPES:-}
     restart: unless-stopped
 

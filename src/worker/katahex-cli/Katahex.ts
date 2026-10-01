@@ -1,5 +1,4 @@
 import { StandardizedPosition } from '../../shared/StandardizedPosition';
-import logger from '../../shared/logger';
 import { takeKataRawNBestMoves } from '../../shared/utils';
 import GTPClient from '../GTPClient';
 import { KatahexCommand } from './types';
@@ -7,6 +6,38 @@ import { KatahexCommand } from './types';
 export type RawNNOutput = {
     values: number[][];
     whiteWin: number;
+};
+
+export type SearchMove = {
+    move: string;
+    visits: number;
+
+    /**
+     * Win rate of player to play after this move.
+     */
+    winrate: number;
+
+    /**
+     * Raw neural network policy of this move.
+     */
+    prior: number;
+
+    /**
+     * Rank of this move, 0 for best move.
+     */
+    order: number;
+};
+
+export type SearchOutput = {
+    /**
+     * Searched moves, best move first. Pass excluded.
+     */
+    moves: SearchMove[];
+
+    /**
+     * Move chosen by katahex, can be pass ("pss").
+     */
+    played: string;
 };
 
 export default class Katahex
@@ -107,36 +138,69 @@ export default class Katahex
     }
 
     /**
-     * Calculate best move as black or white.
-     * Warning: can return "pass" when Katahex feels he is too winning or too losing.
-     *
-     * Use getBestNonPassingMoveFromTreeSearch() instead.
+     * Limit tree search of next searches.
      */
-    async generateMove(color: 'black' | 'white'): Promise<string>
+    async setMaxPlayouts(maxPlayouts: number): Promise<void>
     {
-        return this.sendCommand('genmove', color);
+        await this.sendCommand('kata-set-param', 'maxPlayouts', maxPlayouts);
     }
 
-    async getBestNonPassingMoveFromTreeSearch(color: 'black' | 'white'): Promise<string>
+    /**
+     * Set position with its current player to play.
+     *
+     * set_position always sets black to play, so when white is to play,
+     * set position without a black stone, then play this black stone.
+     *
+     * Used for tree search instead of mirroring position to make black play:
+     * a mirrored position (black to play, with one less stone)
+     * is unusual for katahex, which then searches wrong lines.
+     */
+    async setPositionWithCurrentPlayer(standardizedPosition: StandardizedPosition): Promise<void>
     {
-        const move = await this.sendCommand('genmove_debug', color);
-
-        if (!move.match(/^pa?ss$/)) { // katahex returns "pss"
-            return move;
+        if ('black' === standardizedPosition.currentPlayer) {
+            await this.setStandardizedPosition(standardizedPosition);
+            return;
         }
 
-        // In case of "pass" move, returns first non-pass move from best moves
-        logger.debug('Katahex returned "pass", searching best non-pass move in genmove_debug');
-        const genmoveDebug = this.gtpClient.getLastStdErrChunks().join('');
-        logger.debug(genmoveDebug);
-        const match = genmoveDebug.match(/^([a-z]+\d+) *:/m);
+        const position = standardizedPosition.clone();
+        const lastBlackCell = position.blackCells.pop();
 
-        if (null === match || match.length < 2) {
-            logger.error('Did not found best move in katahex genmove debug');
-            return 'resign';
+        await this.setStandardizedPosition(position);
+        await this.play('black', lastBlackCell ?? 'pass');
+    }
+
+    /**
+     * Run a tree search, limited by maxPlayouts param,
+     * and returns searched moves and the move katahex would play.
+     * Also plays the move on the board.
+     *
+     * @param color Player to play, must be the one set on board, see setPositionWithCurrentPlayer().
+     * @param maxMoves Max number of searched moves to return.
+     */
+    async searchAnalyze(color: 'black' | 'white', maxMoves: number): Promise<SearchOutput>
+    {
+        // Without interval, analyze line is printed once, at end of search
+        const output = await this.sendCommand('kata-genmove_analyze', color, 'maxmoves', maxMoves);
+        const lines = output.split('\n');
+        const infoLine = lines.find(line => line.startsWith('info ')) ?? '';
+        const playLine = lines.find(line => line.startsWith('play ')) ?? null;
+
+        if (null === playLine) {
+            throw new Error('Did not found played move in katahex genmove analyze output');
         }
 
-        return match[1];
+        const moves = infoLine
+            .split(/(?:^| )info /)
+            .filter(info => '' !== info)
+            .map(info => parseSearchMove(info))
+            .filter(searchMove => !isPass(searchMove.move))
+            .sort((a, b) => a.order - b.order)
+        ;
+
+        return {
+            moves,
+            played: playLine.substring('play '.length).trim(),
+        };
     }
 
     /**
@@ -199,6 +263,36 @@ export default class Katahex
         ].join(' ');
     }
 }
+
+/**
+ * Katahex returns "pss" for pass.
+ */
+export const isPass = (move: string): boolean => /^pa?ss$/.test(move);
+
+/**
+ * Parse a move from analyze output, like:
+ * "move i7 visits 40 utility 0.99 winrate 0.99 ... prior 0.03 ... order 0 pv i7 g4 c11"
+ */
+const parseSearchMove = (info: string): SearchMove => {
+    const tokens = info.trim().split(/ +/);
+    const get = (key: string): string => {
+        const index = tokens.indexOf(key);
+
+        if (-1 === index || index + 1 >= tokens.length) {
+            throw new Error(`Missing "${key}" in katahex analyze output: "${info}"`);
+        }
+
+        return tokens[index + 1];
+    };
+
+    return {
+        move: get('move'),
+        visits: parseInt(get('visits'), 10),
+        winrate: parseFloatOrZero(get('winrate')),
+        prior: parseFloatOrZero(get('prior')),
+        order: parseInt(get('order'), 10),
+    };
+};
 
 /**
  * Do not return NaN when parsing "N/A",

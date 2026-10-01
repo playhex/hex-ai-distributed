@@ -23,10 +23,10 @@ Tree search job types (`katahex-mcts-*`) require more computing power: they are 
 list them explicitly on a powerful computer:
 
 ``` bash
-docker run --rm -e AI_WORKER_KEY=<key> -e AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-intuition-analyze-move playhex/worker-katahex
+docker run --rm -e AI_WORKER_KEY=<key> -e AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-mcts-analyze-position,katahex-intuition-analyze-move,katahex-mcts-analyze-move playhex/worker-katahex
 ```
 
-`katahex-mcts-analyze-position` and `katahex-mcts-analyze-move` are not yet implemented.
+Tree search is limited by the `maxPlayouts` sent by the server in each `katahex-mcts-*` job.
 
 Server gives jobs by job type priority (bot moves, then Hexplorer positions, then game analyzes), then oldest first.
 A job type without any worker does not block other job types.
@@ -55,6 +55,75 @@ Stop a worker with Ctrl+C: it finishes its current job before stopping.
 Press Ctrl+C again to stop immediately, the job is then given to another worker.
 
 A killed worker is fine too: server gives its job to another worker after 30 seconds without heartbeat.
+
+### Without Docker, with your own Katahex build
+
+Useful to run Katahex on a GPU: Docker image uses the CPU backend (Eigen), much slower.
+
+Requires Node 22 and yarn.
+
+1. Compile Katahex:
+
+``` bash
+git clone https://github.com/selinger/katahex
+cd katahex/
+mkdir build && cd build
+
+# Choose one backend:
+cmake -DUSE_BACKEND=CUDA -DMAX_BOARD_LEN=32 ../cpp      # NVIDIA GPU, requires CUDA and cuDNN
+cmake -DUSE_BACKEND=TENSORRT -DMAX_BOARD_LEN=32 ../cpp  # NVIDIA GPU, faster, requires CUDA and TensorRT
+cmake -DUSE_BACKEND=OPENCL -DMAX_BOARD_LEN=32 ../cpp    # Any GPU (AMD, Intel, NVIDIA), requires OpenCL (i.e ocl-icd-opencl-dev)
+cmake -DUSE_BACKEND=EIGEN -DMAX_BOARD_LEN=32 ../cpp     # CPU only, requires libeigen3-dev
+
+make -j4
+```
+
+Build also requires `libzip-dev` and `zlib1g-dev`.
+See [KataGo compiling instructions](https://github.com/lightvector/KataGo/blob/master/Compiling.md) for backends dependencies.
+
+Check it answers, with the model (see [Katahex](#katahex) to download it):
+
+``` bash
+./katahex gtp -config <this repo>/katahex/config.cfg -model <this repo>/katahex/katahex_model_20220618.bin.gz
+
+version
+boardsize 11
+genmove b
+quit
+```
+
+2. Install the worker, from this repo:
+
+``` bash
+yarn install
+cp .env.dist .env
+```
+
+3. In `.env`, set your key, and the command to run your Katahex build (absolute paths):
+
+``` bash
+ENGINE=katahex
+HEX_URL=https://playhex.org
+AI_WORKER_KEY=<key> # Ai worker key, ask PlayHex admin, or for a local instance, generate one, see playhex Readme: ### Play with AI
+KATAHEX_BIN="/path/to/katahex/build/katahex gtp -config /path/to/hex-ai-distributed/katahex/config.cfg -model /path/to/hex-ai-distributed/katahex/katahex_model_20220618.bin.gz"
+
+# Make your worker accept all jobs (or only "-intuition-" and/or "-mcts-" ones):
+AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-mcts-analyze-position,katahex-intuition-analyze-move,katahex-mcts-analyze-move
+```
+
+Values in `.env` override env vars set in your shell.
+
+4. Build and run the worker:
+
+``` bash
+yarn build
+node dist/src/worker
+```
+
+`yarn build` copies `.env` into `dist/`: build again after changing `.env`.
+
+Adjust `katahex/config.cfg` to your computer: `numSearchThreads`, `nnCacheSizePowerOfTwo` (memory),
+and for multiple GPUs `numNNServerThreadsPerModel` and `gpuToUseThread*`.
 
 ## Development
 
@@ -96,8 +165,8 @@ There is one image per engine, built from the same `Dockerfile` with a different
 | Mohex   | `mohex`   | `playhex/worker-mohex`   |
 | Davies  | `davies`  | `playhex/worker-davies`  |
 
-Engines versions are pinned in `Dockerfile` (`MOHEX_COMMIT`, `KATAHEX_COMMIT`):
-a different version could change bots strength.
+Mohex version is pinned in `Dockerfile` (`MOHEX_COMMIT`):
+it is the last working commit, more recent ones are buggy.
 
 Katahex image requires the model file in `katahex/` folder, see [Katahex](#katahex) below.
 
