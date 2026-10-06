@@ -23,7 +23,7 @@ const engine = ENGINE;
  * Job types this worker processes.
  * By default, job types of its engine, except opt-in ones (i.e katahex-mcts-*) which must be explicitly set.
  */
-const jobTypes: AiJobType[] = AI_JOB_TYPES
+let jobTypes: AiJobType[] = AI_JOB_TYPES
     ? AI_JOB_TYPES.split(',').map(type => type.trim()).filter(type => '' !== type).map(type => {
         if (!isAiJobType(type) || getAiJobTypeEngine(type) !== engine) {
             throw new Error(`AI_JOB_TYPES: "${type}" is not a job type of ${engine}. Expected some of: ${getEngineAiJobTypes(engine).join(', ')}`);
@@ -261,6 +261,18 @@ process.on('SIGTERM', onStopSignal);
     const engineWorker = await loadEngineWorker(engine);
 
     logger.info(`Engine ready: ${await engineWorker.version()}`);
+
+    const unavailableJobTypes = jobTypes.filter(type => engineWorker.unavailableJobTypes.includes(type));
+
+    if (unavailableJobTypes.length > 0) {
+        // Explicitly requested job types must be processed
+        if (AI_JOB_TYPES) {
+            throw new Error(`AI_JOB_TYPES: ${unavailableJobTypes.join(', ')} not supported by this ${engine} build, update it`);
+        }
+
+        logger.warning(`Not processing ${unavailableJobTypes.join(', ')}: not supported by this ${engine} build, update it`);
+        jobTypes = jobTypes.filter(type => !unavailableJobTypes.includes(type));
+    }
     logger.info(`Pulling jobs ${jobTypes.join(', ')} from ${hexUrl}, worker id: ${workerId}`);
 
     await run(engineWorker);

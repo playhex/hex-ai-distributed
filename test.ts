@@ -1,5 +1,5 @@
 import './config';
-import { analyzeMove } from './src/worker/task/analyze-move';
+import { analyzeGame } from './src/worker/task/analyze-game';
 import { analyzeMoveMcts } from './src/worker/task/mcts/mcts-analyze-move';
 import { analyzePositionMcts } from './src/worker/task/mcts/mcts-analyze-position';
 import { processJobKatahexMcts } from './src/worker/task/mcts/mcts-move';
@@ -24,7 +24,7 @@ import { processJobKatahexMcts } from './src/worker/task/mcts/mcts-move';
         size: 14,
     };
 
-    console.log('intuition', await analyzeMove(analyzeMoveInput));
+    console.log('intuition game', await analyzeGame({ size: 14, movesHistory: `${analyzeMoveInput.movesHistory} ${analyzeMoveInput.move}` }));
     console.log('mcts', await analyzeMoveMcts({ ...analyzeMoveInput, maxPlayouts: 400 }));
 
     console.log('mcts position', await analyzePositionMcts({

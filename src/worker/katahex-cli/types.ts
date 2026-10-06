@@ -39,6 +39,7 @@ export type KatahexCommand =
     | 'kata-analyze'
     | 'gogui-gfx-analyze'
     | 'kata-raw-nn'
+    | 'kata-raw-nn-batch'
     | 'cputime'
     | 'gomill-cpu_time'
     | 'kata-debug-print-tc'

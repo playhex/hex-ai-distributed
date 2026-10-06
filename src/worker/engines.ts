@@ -13,7 +13,7 @@ export const IMPLEMENTED_AI_JOB_TYPES: readonly AiJobType[] = [
     'katahex-mcts-move',
     'katahex-intuition-analyze-position',
     'katahex-mcts-analyze-position',
-    'katahex-intuition-analyze-move',
+    'katahex-intuition-analyze-game',
     'katahex-mcts-analyze-move',
     'mohex',
     'davies',
@@ -22,6 +22,12 @@ export const IMPLEMENTED_AI_JOB_TYPES: readonly AiJobType[] = [
 export type EngineWorker = {
     version: () => Promise<string>;
     process: (task: AiTask) => Promise<unknown>;
+
+    /**
+     * Job types this worker cannot process with its engine build,
+     * i.e katahex build without kata-raw-nn-batch command cannot analyze games.
+     */
+    unavailableJobTypes: AiJobType[];
 };
 
 const notSupported = (engine: Engine, task: AiTask): never => {
@@ -36,19 +42,25 @@ export const loadEngineWorker = async (engine: Engine): Promise<EngineWorker> =>
     switch (engine) {
         case 'katahex': {
             const { katahex, processJobKatahex } = await import('./task/calculate-move/katahex');
-            const { analyzeMove } = await import('./task/analyze-move');
+            const { analyzeGame } = await import('./task/analyze-game');
             const { analyzePosition } = await import('./task/analyze-position');
             const { processJobKatahexMcts } = await import('./task/mcts/mcts-move');
             const { analyzeMoveMcts } = await import('./task/mcts/mcts-analyze-move');
             const { analyzePositionMcts } = await import('./task/mcts/mcts-analyze-position');
 
+            const unavailableJobTypes: AiJobType[] = await katahex.supportsCommand('kata-raw-nn-batch')
+                ? []
+                : ['katahex-intuition-analyze-game']
+            ;
+
             return {
                 version: () => katahex.version(),
+                unavailableJobTypes,
                 process: async task => {
                     switch (task.type) {
                         case 'katahex-intuition-move': return await processJobKatahex(task.data);
                         case 'katahex-mcts-move': return await processJobKatahexMcts(task.data);
-                        case 'katahex-intuition-analyze-move': return await analyzeMove(task.data);
+                        case 'katahex-intuition-analyze-game': return await analyzeGame(task.data);
                         case 'katahex-mcts-analyze-move': return await analyzeMoveMcts(task.data);
                         case 'katahex-intuition-analyze-position': return await analyzePosition(task.data);
                         case 'katahex-mcts-analyze-position': return await analyzePositionMcts(task.data);
@@ -64,6 +76,7 @@ export const loadEngineWorker = async (engine: Engine): Promise<EngineWorker> =>
 
             return {
                 version: () => mohex.version(),
+                unavailableJobTypes: [],
                 process: async task => task.type === 'mohex'
                     ? await processJobMohex(task.data)
                     : notSupported(engine, task)
@@ -76,6 +89,7 @@ export const loadEngineWorker = async (engine: Engine): Promise<EngineWorker> =>
 
             return {
                 version: async () => daviesVersion,
+                unavailableJobTypes: [],
                 process: async task => task.type === 'davies'
                     ? processJobDavies(task.data)
                     : notSupported(engine, task)

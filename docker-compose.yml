@@ -1,5 +1,6 @@
 # Run workers connected to a PlayHex server.
 # Set AI_WORKER_KEY (and optionally HEX_URL) in .env or in your shell, then:
+# For a server running on host, use HEX_URL=http://host.docker.internal:3000 (localhost is the container itself).
 #
 #   docker compose up katahex
 #   docker compose up --scale katahex=3 katahex mohex
@@ -15,6 +16,8 @@ services:
       HEX_URL: ${HEX_URL:-https://playhex.org}
       AI_WORKER_KEY: ${AI_WORKER_KEY:-}
       AI_JOB_TYPES: ${AI_JOB_TYPES:-}
+    extra_hosts: &worker-extra-hosts
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   mohex:
@@ -23,6 +26,7 @@ services:
       context: .
       target: mohex
     environment: *worker-environment
+    extra_hosts: *worker-extra-hosts
     restart: unless-stopped
 
   davies:
@@ -31,4 +35,5 @@ services:
       context: .
       target: davies
     environment: *worker-environment
+    extra_hosts: *worker-extra-hosts
     restart: unless-stopped

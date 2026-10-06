@@ -109,19 +109,7 @@ export default class Katahex
             return;
         }
 
-        const black = standardizedPosition
-            .blackCells
-            .map(cell => `black ${cell}`)
-            .join(' ')
-        ;
-
-        const white = standardizedPosition
-            .whiteCells
-            .map(cell => `white ${cell}`)
-            .join(' ')
-        ;
-
-        await this.setPosition(black + (black && white ? ' ' : '') + white);
+        await this.setPosition(toStonePairs(standardizedPosition));
     }
 
     async showboard(): Promise<string>
@@ -210,32 +198,46 @@ export default class Katahex
     async parseRawNn(symmetry: number = 0): Promise<RawNNOutput>
     {
         const output = await this.sendCommand('kata-raw-nn', symmetry);
-        const lines = output.split('\n');
-        const globalValues: { [key: string]: number } = {};
 
-        while (lines.length > 0 && lines[0] !== 'policy') {
-            const globalValue = lines.shift()?.split(' ');
+        return parseRawNnBlock(output.split('\n'));
+    }
 
-            if (globalValue && 2 === globalValue.length) {
-                globalValues[globalValue[0]] = parseFloatOrZero(globalValue[1]);
+    /**
+     * Same as parseRawNn(), for many positions at once, black to play, on current board size.
+     * Katahex evaluates them in parallel, so that its neural network evaluates them in batches.
+     * Does not change current position.
+     *
+     * @returns Output of each position, in same order.
+     */
+    async parseRawNnBatch(positions: StandardizedPosition[], symmetry: number = 0): Promise<RawNNOutput[]>
+    {
+        if (0 === positions.length) {
+            return [];
+        }
+
+        const output = await this.sendCommand(
+            'kata-raw-nn-batch',
+            symmetry,
+            positions.map(position => toStonePairs(position)).join(' | '),
+        );
+
+        // Split on "position <i>" lines
+        const blocks: string[][] = [];
+
+        for (const line of output.split('\n')) {
+            if (/^position \d+$/.test(line.trim())) {
+                blocks.push([]);
+                continue;
             }
+
+            blocks[blocks.length - 1]?.push(line);
         }
 
-        while (lines.length > 0 && !lines[lines.length - 1].startsWith('policyPass')) {
-            lines.pop();
+        if (blocks.length !== positions.length) {
+            throw new Error(`Expected ${positions.length} positions in katahex batch output, got ${blocks.length}`);
         }
 
-        if (lines.length <= 2) {
-            throw new Error('Did not found model values in katahex output');
-        }
-
-        lines.shift();
-        lines.pop();
-
-        return {
-            values: lines.map(line => line.trim().split(/ +/).map(v => parseFloatOrZero(v))),
-            whiteWin: globalValues['whiteWin'],
-        };
+        return blocks.map(lines => parseRawNnBlock(lines));
     }
 
     /**
@@ -255,6 +257,14 @@ export default class Katahex
         return bestMove.move.toString();
     }
 
+    /**
+     * Whether this katahex build supports a command, i.e kata-raw-nn-batch, which is not in older builds.
+     */
+    async supportsCommand(command: KatahexCommand): Promise<boolean>
+    {
+        return 'true' === (await this.sendCommand('known_command', command)).trim();
+    }
+
     async version(): Promise<string>
     {
         return [
@@ -263,6 +273,47 @@ export default class Katahex
         ].join(' ');
     }
 }
+
+/**
+ * Stones of a position, as expected by set_position, like "black a1 black c3 white b2".
+ */
+const toStonePairs = (standardizedPosition: StandardizedPosition): string => [
+    ...standardizedPosition.blackCells.map(cell => `black ${cell}`),
+    ...standardizedPosition.whiteCells.map(cell => `white ${cell}`),
+].join(' ');
+
+/**
+ * Parse output of kata-raw-nn for a single position:
+ * global values ("whiteWin 0.42"), then "policy", then policy rows, then "policyPass".
+ */
+const parseRawNnBlock = (lines: string[]): RawNNOutput => {
+    lines = [...lines];
+    const globalValues: { [key: string]: number } = {};
+
+    while (lines.length > 0 && lines[0] !== 'policy') {
+        const globalValue = lines.shift()?.split(' ');
+
+        if (globalValue && 2 === globalValue.length) {
+            globalValues[globalValue[0]] = parseFloatOrZero(globalValue[1]);
+        }
+    }
+
+    while (lines.length > 0 && !lines[lines.length - 1].startsWith('policyPass')) {
+        lines.pop();
+    }
+
+    if (lines.length <= 2) {
+        throw new Error('Did not found model values in katahex output');
+    }
+
+    lines.shift();
+    lines.pop();
+
+    return {
+        values: lines.map(line => line.trim().split(/ +/).map(v => parseFloatOrZero(v))),
+        whiteWin: globalValues['whiteWin'],
+    };
+};
 
 /**
  * Katahex returns "pss" for pass.

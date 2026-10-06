@@ -10,7 +10,7 @@ PlayHex server, one queue per job type          <-- HTTPS long-polling, api key 
 
   [katahex-intuition-move]              ─┐
   [katahex-intuition-analyze-position]   ├──  worker katahex (x N)
-  [katahex-intuition-analyze-move]      ─┘
+  [katahex-intuition-analyze-game]      ─┘
   [katahex-mcts-move]                   ─┐
   [katahex-mcts-analyze-position]        ├··  only workers with AI_JOB_TYPES including them
   [katahex-mcts-analyze-move]           ─┘
@@ -23,7 +23,7 @@ Tree search job types (`katahex-mcts-*`) require more computing power: they are 
 list them explicitly on a powerful computer:
 
 ``` bash
-docker run --rm -e AI_WORKER_KEY=<key> -e AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-mcts-analyze-position,katahex-intuition-analyze-move,katahex-mcts-analyze-move playhex/worker-katahex
+docker run --rm -e AI_WORKER_KEY=<key> -e AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-mcts-analyze-position,katahex-intuition-analyze-game,katahex-mcts-analyze-move playhex/worker-katahex
 ```
 
 Tree search is limited by the `maxPlayouts` sent by the server in each `katahex-mcts-*` job.
@@ -65,7 +65,7 @@ Requires Node 22 and yarn.
 1. Compile Katahex:
 
 ``` bash
-git clone https://github.com/selinger/katahex
+git clone https://github.com/playhex/katahex
 cd katahex/
 mkdir build && cd build
 
@@ -108,7 +108,7 @@ AI_WORKER_KEY=<key> # Ai worker key, ask PlayHex admin, or for a local instance,
 KATAHEX_BIN="/path/to/katahex/build/katahex gtp -config /path/to/hex-ai-distributed/katahex/config.cfg -model /path/to/hex-ai-distributed/katahex/katahex_model_20220618.bin.gz"
 
 # Make your worker accept all jobs (or only "-intuition-" and/or "-mcts-" ones):
-AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-mcts-analyze-position,katahex-intuition-analyze-move,katahex-mcts-analyze-move
+AI_JOB_TYPES=katahex-intuition-move,katahex-mcts-move,katahex-intuition-analyze-position,katahex-mcts-analyze-position,katahex-intuition-analyze-game,katahex-mcts-analyze-move
 ```
 
 Values in `.env` override env vars set in your shell.
@@ -123,7 +123,11 @@ node dist/src/worker
 `yarn build` copies `.env` into `dist/`: build again after changing `.env`.
 
 Adjust `katahex/config.cfg` to your computer: `numSearchThreads`, `nnCacheSizePowerOfTwo` (memory),
+`nnMaxBatchSize` (positions evaluated at once by the GPU when analyzing a game),
 and for multiple GPUs `numNNServerThreadsPerModel` and `gpuToUseThread*`.
+
+Game analyzes (`katahex-intuition-analyze-game`) require a Katahex build with the `kata-raw-nn-batch` command, from the [playhex fork](https://github.com/playhex/katahex).
+With an older build, the worker logs a warning and does not process them.
 
 ## Development
 

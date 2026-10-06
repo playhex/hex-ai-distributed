@@ -1,6 +1,7 @@
 # One image per engine, build with:
 #
 #   docker build --target katahex -t playhex/worker-katahex .
+#   docker build --target katahex -t playhex/worker-katahex --build-context katahex-src=../katahex .   # local katahex checkout
 #   docker build --target mohex -t playhex/worker-mohex .
 #   docker build --target davies -t playhex/worker-davies .
 #
@@ -60,16 +61,36 @@ RUN cd /tmp \
     && ldd /bin/mohex | awk '/=> \// { print $3 }' | grep -vE '/(libc|libm|libstdc\+\+|libgcc_s|libpthread|libdl|librt|ld-linux[^/]*)\.so' | xargs -I{} cp -L {} /engine-libs/
 
 
+# Katahex sources. Cloned from git by default, must contain kata-raw-nn-batch GTP command, used to analyze games.
+# Override with --build-arg to build from a fork or a given commit,
+# or with a local checkout: --build-context katahex-src=../katahex
+FROM engine-build AS katahex-clone
+
+ARG KATAHEX_REPO=https://github.com/playhex/katahex
+ARG KATAHEX_REF=Hex2024
+
+RUN git clone ${KATAHEX_REPO} /katahex \
+    && cd /katahex \
+    && git checkout ${KATAHEX_REF}
+
+
+# Same layout as a katahex checkout, replaced by --build-context katahex-src=...
+FROM scratch AS katahex-src
+
+COPY --from=katahex-clone /katahex/cpp /cpp
+
+
 FROM engine-build AS katahex-build
 
 RUN apt-get install -y libeigen3-dev libzip-dev zlib1g-dev
 
-RUN cd /tmp \
-    && git clone https://github.com/selinger/katahex \
-    && cd katahex/ \
+# Only cpp/ sources, to not copy local build folders
+COPY --from=katahex-src cpp /tmp/katahex/cpp
+
+RUN cd /tmp/katahex \
     && mkdir build \
     && cd build \
-    && cmake -DUSE_BACKEND=EIGEN -DMAX_BOARD_LEN=32 ../cpp \
+    && cmake -DUSE_BACKEND=EIGEN -DMAX_BOARD_LEN=32 -DNO_GIT_REVISION=1 ../cpp \
     && make -j4 \
     && mv ./katahex /bin/katahex \
     && mkdir /engine-libs \
