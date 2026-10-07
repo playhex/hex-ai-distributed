@@ -56,6 +56,11 @@ const MIN_BACKOFF_MS = 1000;
 const MAX_BACKOFF_MS = 60_000;
 
 /**
+ * Do not delay worker stop too long when server is unreachable.
+ */
+const DISCONNECT_TIMEOUT_MS = 2000;
+
+/**
  * Key is invalid or revoked, worker must stop.
  */
 class UnauthorizedError extends Error {}
@@ -90,6 +95,19 @@ const api = async (path: string, body: object, signal?: AbortSignal): Promise<Re
     }
 
     return response;
+};
+
+/**
+ * Tells server this worker stops, so it is not considered online anymore, then exits.
+ */
+const disconnectAndExit = async (): Promise<never> => {
+    try {
+        await api('/disconnect', {}, AbortSignal.timeout(DISCONNECT_TIMEOUT_MS));
+    } catch (e) {
+        logger.warning('Could not notify server of disconnection', { message: e instanceof Error ? e.message : String(e) });
+    }
+
+    process.exit(0);
 };
 
 /**
@@ -226,7 +244,7 @@ const run = async (engineWorker: EngineWorker): Promise<void> => {
     }
 
     logger.info('Worker stopped.');
-    process.exit(0);
+    await disconnectAndExit();
 };
 
 /**
@@ -248,14 +266,15 @@ const onStopSignal = (): void => {
     const job = currentJob;
 
     if (null === job) {
-        process.exit(0);
+        void disconnectAndExit();
+        return;
     }
 
     logger.info('Giving back current job to server...');
 
     api(`/jobs/${job.jobId}/fail`, { token: job.token, error: 'Worker stopped', retryable: true })
         .catch(e => logger.warning('Could not give back job', { message: e.message }))
-        .finally(() => process.exit(0))
+        .finally(() => disconnectAndExit())
     ;
 };
 

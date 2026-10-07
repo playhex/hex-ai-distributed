@@ -54,7 +54,7 @@ docker compose up --scale katahex=3 katahex mohex
 Stop a worker with Ctrl+C: it finishes its current job before stopping.
 Press Ctrl+C again to stop immediately, the job is then given to another worker.
 
-A killed worker is fine too: server gives its job to another worker after 30 seconds without heartbeat.
+A killed worker is fine too: server gives its job to another worker after 15 seconds without heartbeat.
 
 ### Without Docker, with your own Katahex build
 
@@ -289,9 +289,10 @@ showboard
 
 See `src/shared/protocol.ts`, copied from hex repo (`src/server/ai-jobs/protocol.ts`).
 
-- `POST /api/ai-workers/jobs/next`: get next job among job types sent in `types`. Server holds the request up to 25 seconds when there is no job, then responds 204.
-- `POST /api/ai-workers/jobs/:jobId/heartbeat`: every 10 seconds while processing a job, else job is given to another worker.
+- `POST /api/ai-workers/jobs/next`: get next job among job types sent in `types`. Server holds the request up to 15 seconds when there is no job, then responds 204.
+- `POST /api/ai-workers/jobs/:jobId/heartbeat`: every 5 seconds while processing a job, else job is given to another worker.
 - `POST /api/ai-workers/jobs/:jobId/result`: send result. Server validates it (legal move...).
 - `POST /api/ai-workers/jobs/:jobId/fail`: task could not be processed. `retryable: true` to give it to another worker.
+- `POST /api/ai-workers/disconnect`: worker is stopping, server considers it offline immediately.
 
 Server responds 409 if job has been given to another worker meanwhile, and 401 if key is invalid or revoked.
