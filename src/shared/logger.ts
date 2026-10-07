@@ -38,8 +38,13 @@ const logger: Pick<Logger, SyslogLevels> = winston.createLogger({
     transports: [
         new winston.transports.Console({
             format: winston.format.combine(
+                winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
                 winston.format.colorize(),
-                winston.format.simple(),
+                winston.format.printf(({ timestamp, level, message, ...meta }) => {
+                    const metaString = Object.keys(meta).length > 0 ? ' ' + JSON.stringify(meta) : '';
+
+                    return `${timestamp} ${level}: ${message}${metaString}`;
+                }),
             ),
         }),
     ],
