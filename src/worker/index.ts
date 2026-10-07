@@ -188,10 +188,16 @@ const processJob = async (engineWorker: EngineWorker, reservedJob: ReservedJob):
 
 const run = async (engineWorker: EngineWorker): Promise<void> => {
     let backoffMs = MIN_BACKOFF_MS;
+    let disconnected = false;
 
     while (!stopping) {
         try {
             currentJob = await fetchNextJob();
+
+            if (disconnected) {
+                disconnected = false;
+                logger.info('Reconnected to server');
+            }
 
             if (null !== currentJob) {
                 await processJob(engineWorker, currentJob);
@@ -211,6 +217,7 @@ const run = async (engineWorker: EngineWorker): Promise<void> => {
                 process.exit(1);
             }
 
+            disconnected = true;
             logger.warning(`Server error, retrying in ${backoffMs / 1000}s`, { message: e instanceof Error ? e.message : String(e) });
 
             await setTimeout(backoffMs);
