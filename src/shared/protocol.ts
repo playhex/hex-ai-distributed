@@ -218,6 +218,50 @@ export type MctsAnalyzePositionInput = AnalyzePositionInput & MctsParams;
 
 export type MctsAnalyzeMoveInput = AnalyzeMoveInput & MctsParams;
 
+export type SolvePositionInput = {
+    size: number;
+    black: string[];
+    white: string[];
+
+    /**
+     * Player to move. Stones count does not need to be consistent with it:
+     * position can be fictitious, like in puzzles.
+     */
+    color: 'black' | 'white';
+
+    /**
+     * Max time of each solver search, in seconds.
+     */
+    timeLimitSeconds: number;
+
+    /**
+     * Also solves position after each empty cell played by color, within this total time.
+     */
+    children?: {
+        maxTimeSeconds: number;
+    };
+};
+
+export type SolveResult = {
+    /**
+     * Proven winner, or null if not proven within time limit.
+     */
+    winner: null | 'black' | 'white';
+
+    /**
+     * Principal variation from solved position, empty if not proven.
+     */
+    pv: string[];
+};
+
+export type SolvePositionOutput = SolveResult & {
+    /**
+     * Result after each empty cell played by color, when children requested.
+     * Winner is null for cells not proven, or not solved because time ran out.
+     */
+    children?: { [move: string]: SolveResult };
+};
+
 /**
  * Input and output of each job type.
  */
@@ -260,6 +304,11 @@ type AiJobTypeDefinitions = {
      * whiteWin of played move and all best moves are always set.
      */
     'katahex-mcts-analyze-move': { input: MctsAnalyzeMoveInput, output: AnalyzeMoveOutput };
+
+    /**
+     * Proves which player wins a position with Mohex solver (DFPN). Used to check puzzles.
+     */
+    'mohex-solve-position': { input: SolvePositionInput, output: SolvePositionOutput };
 };
 
 export type AiJobType = keyof AiJobTypeDefinitions;
@@ -279,6 +328,7 @@ export const AI_JOB_TYPES = [
     'katahex-mcts-analyze-position',
     'katahex-intuition-analyze-game',
     'katahex-mcts-analyze-move',
+    'mohex-solve-position',
 ] as const satisfies readonly AiJobType[];
 
 /**
@@ -289,6 +339,7 @@ export const OPT_IN_AI_JOB_TYPES: readonly AiJobType[] = [
     'katahex-mcts-move',
     'katahex-mcts-analyze-position',
     'katahex-mcts-analyze-move',
+    'mohex-solve-position',
 ];
 
 export const isAiJobType = (type: unknown): type is AiJobType =>

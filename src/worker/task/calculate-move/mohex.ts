@@ -71,6 +71,9 @@ export const processJobMohex = async (jobData: MohexMoveInput): Promise<string> 
         allow_swap: swapStillAllowed && swapRule,
     });
 
+    // Same process solves positions with a time limit, play and solve must not be limited by it
+    await mohex.setDfpnParameters({ timelimit: '0' });
+
     await mohex.setBoardSize(size);
 
     try {

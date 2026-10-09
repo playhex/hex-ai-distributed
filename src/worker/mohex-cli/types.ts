@@ -43,6 +43,15 @@ export type MohexParameters = {
     uct_bias_constant?: string;
 };
 
+export type DfpnParameters = {
+    /**
+     * Max time of each search in seconds, 0 for no limit.
+     */
+    timelimit?: string;
+    threads?: string;
+    tt_size?: string;
+};
+
 export type MohexCommand =
     'add-fillin-to-sgf' |
     'all_legal_moves' |

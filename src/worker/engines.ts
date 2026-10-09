@@ -16,6 +16,7 @@ export const IMPLEMENTED_AI_JOB_TYPES: readonly AiJobType[] = [
     'katahex-intuition-analyze-game',
     'katahex-mcts-analyze-move',
     'mohex',
+    'mohex-solve-position',
     'davies',
 ];
 
@@ -73,14 +74,19 @@ export const loadEngineWorker = async (engine: Engine): Promise<EngineWorker> =>
 
         case 'mohex': {
             const { mohex, processJobMohex } = await import('./task/calculate-move/mohex');
+            const { processJobSolvePosition } = await import('./task/solve-position');
 
             return {
                 version: () => mohex.version(),
                 unavailableJobTypes: [],
-                process: async task => task.type === 'mohex'
-                    ? await processJobMohex(task.data)
-                    : notSupported(engine, task)
-                ,
+                process: async task => {
+                    switch (task.type) {
+                        case 'mohex': return await processJobMohex(task.data);
+                        case 'mohex-solve-position': return await processJobSolvePosition(task.data);
+                    }
+
+                    return notSupported(engine, task);
+                },
             };
         }
 

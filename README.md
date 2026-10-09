@@ -15,6 +15,7 @@ PlayHex server, one queue per job type          <-- HTTPS long-polling, api key 
   [katahex-mcts-analyze-position]        ├··  only workers with AI_JOB_TYPES including them
   [katahex-mcts-analyze-move]           ─┘
   [mohex]                               ────  worker mohex   (x N)
+  [mohex-solve-position]                ····  only mohex workers with AI_JOB_TYPES including it
   [davies]                              ────  worker davies  (x N)
 ```
 
@@ -27,6 +28,14 @@ docker run --rm -e AI_WORKER_KEY=<key> -e AI_JOB_TYPES=katahex-intuition-move,ka
 ```
 
 Tree search is limited by the `maxPlayouts` sent by the server in each `katahex-mcts-*` job.
+
+`mohex-solve-position` proves which player wins a position with Mohex solver, to check puzzles.
+A job can take minutes (time limits are sent by the server), so prefer dedicated mohex workers
+not processing bot moves:
+
+``` bash
+docker run --rm -e AI_WORKER_KEY=<key> -e AI_JOB_TYPES=mohex-solve-position -e MOHEX_SOLVER_THREADS=2 playhex/worker-mohex
+```
 
 Server gives jobs by job type priority (bot moves, then Hexplorer positions, then game analyzes), then oldest first.
 A job type without any worker does not block other job types.

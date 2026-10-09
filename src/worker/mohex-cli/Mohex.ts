@@ -1,4 +1,4 @@
-import { GameParameters, MohexCommand, MohexParameters } from './types';
+import { DfpnParameters, GameParameters, MohexCommand, MohexParameters } from './types';
 import GTPClient from '../GTPClient';
 import { StandardizedPosition } from '../../shared/StandardizedPosition';
 
@@ -26,7 +26,7 @@ export default class Mohex
         return this.gtpClient.sendCommand(mohexCommand, ...parameters);
     }
 
-    private async setParameters(command: MohexCommand, parameters: MohexParameters | GameParameters): Promise<void>
+    private async setParameters(command: MohexCommand, parameters: MohexParameters | GameParameters | DfpnParameters): Promise<void>
     {
         for (const [key, parameter] of Object.entries(parameters)) {
             await this.sendCommand(command, key, parameter);
@@ -41,6 +41,11 @@ export default class Mohex
     async setGameParameters(parameters: GameParameters): Promise<void>
     {
         await this.setParameters('param_game', parameters);
+    }
+
+    async setDfpnParameters(parameters: DfpnParameters): Promise<void>
+    {
+        await this.setParameters('param_dfpn', parameters);
     }
 
     /**
@@ -99,6 +104,22 @@ export default class Mohex
         }
     }
 
+    /**
+     * Sets any position, even not reachable in a game (i.e more white stones than black).
+     */
+    async setPosition(size: number, black: string[], white: string[]): Promise<void>
+    {
+        await this.setBoardSize(size);
+
+        for (const cell of black) {
+            await this.play('black', cell);
+        }
+
+        for (const cell of white) {
+            await this.play('white', cell);
+        }
+    }
+
     async showboard(): Promise<string>
     {
         return await this.sendCommand('showboard');
@@ -110,6 +131,42 @@ export default class Mohex
     async play(color: 'black' | 'white', move: string): Promise<void>
     {
         await this.sendCommand('play', color, move);
+    }
+
+    async undo(): Promise<void>
+    {
+        await this.sendCommand('undo');
+    }
+
+    /**
+     * Solves current position with dfpn solver, color to move.
+     *
+     * @returns Proven winner, or null if not solved within param_dfpn timelimit
+     */
+    async solveState(color: 'black' | 'white'): Promise<null | 'black' | 'white'>
+    {
+        const winner = await this.sendCommand('dfpn-solve-state', color);
+
+        if ('black' === winner || 'white' === winner) {
+            return winner;
+        }
+
+        if ('empty' === winner) {
+            return null;
+        }
+
+        throw new Error(`Unexpected dfpn-solve-state response: "${winner}"`);
+    }
+
+    /**
+     * Principal variation of last solved position, color to move.
+     * Empty when position is won by a virtual connection, without search.
+     */
+    async getDfpnPv(color: 'black' | 'white'): Promise<string[]>
+    {
+        const pv = await this.sendCommand('dfpn-get-pv', color);
+
+        return pv.split(/\s+/).filter(move => move !== '');
     }
 
     /**
