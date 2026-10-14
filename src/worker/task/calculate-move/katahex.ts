@@ -38,7 +38,7 @@ export const processJobKatahex = async (jobData: KatahexMoveInput): Promise<stri
 
     logger.debug(await katahex.showboard());
 
-    let generatedMove = await katahex.getBestMoveFromNeuralNetworkOutput();
+    let generatedMove = await katahex.getMoveFromNeuralNetworkOutput();
 
     logger.debug('generated move, not mirrored: ' + generatedMove);
 

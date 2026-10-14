@@ -1,7 +1,14 @@
 import { StandardizedPosition } from '../../shared/StandardizedPosition';
-import { takeKataRawNBestMoves } from '../../shared/utils';
+import { takeKataRawGoodMoves } from '../../shared/utils';
 import GTPClient from '../GTPClient';
 import { KatahexCommand } from './types';
+
+/**
+ * Intuition bot plays randomly one of the moves
+ * having policy > INTUITION_MOVE_POLICY_RATIO * best policy,
+ * so that it does not always play same games.
+ */
+export const INTUITION_MOVE_POLICY_RATIO = 0.8;
 
 export type RawNNOutput = {
     values: number[][];
@@ -241,20 +248,21 @@ export default class Katahex
     }
 
     /**
-     * Only use raw neural network output to get best move from its intuition.
+     * Only use raw neural network output to get a move from its intuition.
      * Don't make any tree searching.
-     * Returns best move for black.
+     * Returns a random move for black among the best ones,
+     * see INTUITION_MOVE_POLICY_RATIO.
      */
-    async getBestMoveFromNeuralNetworkOutput(symmetry: number = 0): Promise<string>
+    async getMoveFromNeuralNetworkOutput(symmetry: number = 0): Promise<string>
     {
         const rawNNOutput = await this.parseRawNn(symmetry);
-        const bestMove = takeKataRawNBestMoves(rawNNOutput.values, 1).pop() ?? null;
+        const goodMoves = takeKataRawGoodMoves(rawNNOutput.values, INTUITION_MOVE_POLICY_RATIO);
 
-        if (null === bestMove) {
+        if (0 === goodMoves.length) {
             throw new Error('Did not found best move');
         }
 
-        return bestMove.move.toString();
+        return goodMoves[Math.floor(Math.random() * goodMoves.length)].move.toString();
     }
 
     /**

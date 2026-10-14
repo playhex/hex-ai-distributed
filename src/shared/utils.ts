@@ -39,6 +39,38 @@ export const takeKataRawNBestMoves = (values: number[][], nBest: number): MoveAn
     return bestMoves;
 };
 
+/**
+ * Moves with a value > ratio * best value. Best move first.
+ */
+export const takeKataRawGoodMoves = (values: number[][], ratio: number): MoveAndValue[] => {
+    const moves: MoveAndValue[] = [];
+
+    for (let row = 0; row < values.length; ++row) {
+        for (let col = 0; col < values[row].length; ++col) {
+            const value = values[row][col];
+
+            if (isNaN(value)) {
+                continue;
+            }
+
+            moves.push({
+                move: new Move(row, col).toString(),
+                value,
+            });
+        }
+    }
+
+    if (0 === moves.length) {
+        return [];
+    }
+
+    moves.sort((a, b) => b.value - a.value);
+
+    const threshold = ratio * moves[0].value;
+
+    return moves.filter((move, i) => 0 === i || move.value > threshold);
+};
+
 export const takeKataRawMove = (move: string, values: number[][]): MoveAndValue => {
     const { row, col } = Move.fromString(move);
 

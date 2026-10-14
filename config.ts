@@ -1,10 +1,10 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-dotenv.config({
-    path: path.join(__dirname, '.env.dist'),
-});
+// Priority: process env (i.e set by run-worker.sh), then .env, then .env.dist
 dotenv.config({
     path: path.join(__dirname, '.env'),
-    override: true,
+});
+dotenv.config({
+    path: path.join(__dirname, '.env.dist'),
 });
