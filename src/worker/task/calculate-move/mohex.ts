@@ -1,6 +1,6 @@
 import logger from '../../../shared/logger';
 import { MohexMoveInput } from '../../../shared/protocol';
-import Mohex from '../../mohex-cli/Mohex';
+import Mohex, { isLastStoneOwn } from '../../mohex-cli/Mohex';
 import Move from '../../../shared/Move';
 import { StandardizedPosition } from '../../../shared/StandardizedPosition';
 
@@ -65,6 +65,12 @@ export const processJobMohex = async (jobData: MohexMoveInput): Promise<string> 
         max_memory: '' + (1024 * 1024 * 1024), // 1Go
 
         max_games: '' + maxGames,
+    });
+
+    // Do not search around own stone when opponent has no stone, i.e handicap.
+    // Always set: process keeps it for next jobs.
+    await mohex.setMohexPolicyParameters({
+        pattern_heuristic: !isLastStoneOwn(standardizedPosition),
     });
 
     await mohex.setGameParameters({

@@ -1,6 +1,46 @@
-import { DfpnParameters, GameParameters, MohexCommand, MohexParameters } from './types';
+import { DfpnParameters, GameParameters, MohexCommand, MohexParameters, MohexPolicyParameters } from './types';
 import GTPClient from '../GTPClient';
 import { StandardizedPosition } from '../../shared/StandardizedPosition';
+
+type Stone = { color: 'black' | 'white', cell: string };
+
+/**
+ * Order to replay stones of a position on mohex, which searches around the last played move:
+ * last stone must belong to the opponent of current player.
+ *
+ * Alternates colors from the most recent stones, as stones count may differ:
+ * after a swap, white has the first stone.
+ *
+ * Same as game order, unless there is pass moves, which cannot be replayed:
+ * then last stone is the most recent opponent stone,
+ * or a current player stone if opponent has no stone.
+ */
+export const getStonesInPlayOrder = ({ blackCells, whiteCells, currentPlayer }: StandardizedPosition): Stone[] => {
+    const opponent = 'black' === currentPlayer ? 'white' : 'black';
+    const playerCells = 'black' === currentPlayer ? blackCells : whiteCells;
+    const opponentCells = 'black' === currentPlayer ? whiteCells : blackCells;
+    const stones: Stone[] = [];
+
+    for (let i = Math.max(playerCells.length, opponentCells.length); i > 0; --i) {
+        if (i <= playerCells.length) {
+            stones.push({ color: currentPlayer, cell: playerCells[playerCells.length - i] });
+        }
+
+        if (i <= opponentCells.length) {
+            stones.push({ color: opponent, cell: opponentCells[opponentCells.length - i] });
+        }
+    }
+
+    return stones;
+};
+
+/**
+ * Whether last stone replayed by getStonesInPlayOrder() is a current player stone,
+ * so there is no opponent move to answer to.
+ */
+export const isLastStoneOwn = (position: StandardizedPosition): boolean =>
+    getStonesInPlayOrder(position).at(-1)?.color === position.currentPlayer
+;
 
 /**
  * Spawn a process from mohex binary,
@@ -26,7 +66,7 @@ export default class Mohex
         return this.gtpClient.sendCommand(mohexCommand, ...parameters);
     }
 
-    private async setParameters(command: MohexCommand, parameters: MohexParameters | GameParameters | DfpnParameters): Promise<void>
+    private async setParameters(command: MohexCommand, parameters: MohexParameters | MohexPolicyParameters | GameParameters | DfpnParameters): Promise<void>
     {
         for (const [key, parameter] of Object.entries(parameters)) {
             await this.sendCommand(command, key, parameter);
@@ -36,6 +76,11 @@ export default class Mohex
     async setMohexParameters(parameters: MohexParameters): Promise<void>
     {
         await this.setParameters('param_mohex', parameters);
+    }
+
+    async setMohexPolicyParameters(parameters: MohexPolicyParameters): Promise<void>
+    {
+        await this.setParameters('param_mohex_policy', parameters);
     }
 
     async setGameParameters(parameters: GameParameters): Promise<void>
@@ -70,37 +115,10 @@ export default class Mohex
 
     async setStandardizedPosition(standardizedPosition: StandardizedPosition): Promise<void>
     {
-        const { blackCells, whiteCells } = standardizedPosition;
+        await this.sendCommand('clear_board');
 
-        if (0 === blackCells.length && 0 === whiteCells.length) {
-            await this.sendCommand('clear_board');
-            return;
-        }
-
-        const playGame = [];
-        let i = 0;
-
-        while (i < blackCells.length && i < whiteCells.length) {
-            playGame.push(blackCells[i]);
-            playGame.push(whiteCells[i]);
-
-            ++i;
-        }
-
-        if (blackCells.length > i) {
-            playGame.push(blackCells[i]);
-        }
-
-        if (playGame.length > 0) {
-            await this.playGame(playGame.join(' '));
-        }
-
-        for (const cell of blackCells.slice(i + 1)) {
-            await this.play('black', cell);
-        }
-
-        for (const cell of whiteCells.slice(i)) {
-            await this.play('white', cell);
+        for (const { color, cell } of getStonesInPlayOrder(standardizedPosition)) {
+            await this.play(color, cell);
         }
     }
 

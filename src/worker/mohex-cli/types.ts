@@ -43,6 +43,13 @@ export type MohexParameters = {
     uct_bias_constant?: string;
 };
 
+export type MohexPolicyParameters = {
+    /**
+     * Whether playouts favor cells around last played move.
+     */
+    pattern_heuristic?: boolean;
+};
+
 export type DfpnParameters = {
     /**
      * Max time of each search in seconds, 0 for no limit.
