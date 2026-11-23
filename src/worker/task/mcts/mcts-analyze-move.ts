@@ -1,7 +1,6 @@
 import { AnalyzeMoveOutput, MctsAnalyzeMoveInput, MoveAndValue } from '../../../shared/protocol';
 import { StandardizedPosition } from '../../../shared/StandardizedPosition';
-import { SearchMove } from '../../katahex-cli/Katahex';
-import { katahex } from '../calculate-move/katahex';
+import { MctsEngine, SearchMove } from './MctsEngine';
 
 /**
  * Below this visits count, played move win rate is not reliable enough,
@@ -18,7 +17,7 @@ const BEST_MOVES_COUNT = 4;
  * so that a single move can be analyzed without the next one.
  * Move values are raw neural network policy.
  */
-export const analyzeMoveMcts = async (analyzeMove: MctsAnalyzeMoveInput): Promise<AnalyzeMoveOutput> => {
+export const analyzeMoveMcts = async (katahex: MctsEngine, analyzeMove: MctsAnalyzeMoveInput): Promise<AnalyzeMoveOutput> => {
     const { color } = analyzeMove;
     const standardizedPosition = StandardizedPosition.fromMovesHistory(analyzeMove.movesHistory);
 
@@ -57,7 +56,7 @@ export const analyzeMoveMcts = async (analyzeMove: MctsAnalyzeMoveInput): Promis
             : {
                 move: analyzeMove.move,
                 value: searchMove?.prior ?? 0,
-                whiteWin: await calcWhiteWinAfterMove(standardizedPosition, analyzeMove.move),
+                whiteWin: await calcWhiteWinAfterMove(katahex, standardizedPosition, analyzeMove.move),
             }
         ;
     }
@@ -74,7 +73,7 @@ export const analyzeMoveMcts = async (analyzeMove: MctsAnalyzeMoveInput): Promis
 /**
  * Calculate whiteWin after given move is played by current player, with tree search.
  */
-const calcWhiteWinAfterMove = async (standardizedPosition: StandardizedPosition, move: string): Promise<number> => {
+const calcWhiteWinAfterMove = async (katahex: MctsEngine, standardizedPosition: StandardizedPosition, move: string): Promise<number> => {
     const color = standardizedPosition.currentPlayer;
     const opponent = 'black' === color ? 'white' : 'black';
 

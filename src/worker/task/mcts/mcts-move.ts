@@ -1,13 +1,12 @@
 import logger from '../../../shared/logger';
 import { KatahexMctsMoveInput } from '../../../shared/protocol';
 import { StandardizedPosition } from '../../../shared/StandardizedPosition';
-import { isPass } from '../../katahex-cli/Katahex';
-import { katahex } from '../calculate-move/katahex';
+import { isPass, MctsEngine } from './MctsEngine';
 
 /**
  * Katahex move with tree search, limited by maxPlayouts.
  */
-export const processJobKatahexMcts = async (jobData: KatahexMctsMoveInput): Promise<string> => {
+export const processJobKatahexMcts = async (katahex: MctsEngine, jobData: KatahexMctsMoveInput): Promise<string> => {
     const { size, movesHistory, currentPlayer } = jobData.game;
     const standardizedPosition = StandardizedPosition.fromMovesHistory(movesHistory);
 

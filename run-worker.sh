@@ -80,6 +80,12 @@ export ENGINE HEX_URL AI_WORKER_KEY AI_JOB_TYPES
 echo
 echo "Running $ENGINE worker on $HEX_URL"
 echo "Job types: ${AI_JOB_TYPES:-(engine defaults)}"
+
+if [ "$ENGINE" = katahex ]; then
+    KATAHEX_MODEL=$(env_var KATAHEX_BIN | sed -nE 's/.*-model[[:space:]]+([^[:space:]]+).*/\1/p')
+    echo "Katahex model: ${KATAHEX_MODEL:+$(realpath -m "$KATAHEX_MODEL")}"
+fi
+
 echo
 
 exec yarn worker

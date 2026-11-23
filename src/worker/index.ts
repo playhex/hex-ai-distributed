@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout } from 'node:timers/promises';
 import typia from 'typia';
 import logger from '../shared/logger';
-import { AiJobType, getAiJobTypeEngine, getEngineAiJobTypes, getEngineDefaultAiJobTypes, HEARTBEAT_MS, isAiJobType, isEngine, ReservedJob } from '../shared/protocol';
+import { AiJobType, getAiJobTypeEngine, getEngineAiJobTypes, getEngineDefaultAiJobTypes, isAiJobType, isEngine, ReservedJob } from '../shared/protocol';
+import AiWorkerClient, { UnauthorizedError } from '../shared/AiWorkerClient';
 import { EngineWorker, IMPLEMENTED_AI_JOB_TYPES, loadEngineWorker } from './engines';
 import { GTPEngineError } from './GTPClient';
 
@@ -49,6 +50,8 @@ const hexUrl = HEX_URL.replace(/\/+$/, '');
  */
 const workerId = randomUUID();
 
+const client = new AiWorkerClient(hexUrl, AI_WORKER_KEY, workerId, data => typia.assert<ReservedJob>(data));
+
 /**
  * Delay before retrying when server is unreachable, doubled on each consecutive error.
  */
@@ -60,49 +63,16 @@ const MAX_BACKOFF_MS = 60_000;
  */
 const DISCONNECT_TIMEOUT_MS = 2000;
 
-/**
- * Key is invalid or revoked, worker must stop.
- */
-class UnauthorizedError extends Error {}
-
-/**
- * Worker does not own the job anymore (lock expired and job given to another worker).
- */
-class JobNotOwnedError extends Error {}
-
 let stopping = false;
 let currentJob: null | ReservedJob = null;
 const stopController = new AbortController();
-
-const api = async (path: string, body: object, signal?: AbortSignal): Promise<Response> => {
-    const response = await fetch(`${hexUrl}/api/ai-workers${path}`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${AI_WORKER_KEY}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        },
-        body: JSON.stringify({ workerId, ...body }),
-        signal,
-    });
-
-    if (401 === response.status || 403 === response.status) {
-        throw new UnauthorizedError(await response.text());
-    }
-
-    if (409 === response.status) {
-        throw new JobNotOwnedError(await response.text());
-    }
-
-    return response;
-};
 
 /**
  * Tells server this worker stops, so it is not considered online anymore, then exits.
  */
 const disconnectAndExit = async (): Promise<never> => {
     try {
-        await api('/disconnect', {}, AbortSignal.timeout(DISCONNECT_TIMEOUT_MS));
+        await client.disconnect({ signal: AbortSignal.timeout(DISCONNECT_TIMEOUT_MS) });
     } catch (e) {
         logger.warning('Could not notify server of disconnection', { message: e instanceof Error ? e.message : String(e) });
     }
@@ -110,97 +80,32 @@ const disconnectAndExit = async (): Promise<never> => {
     process.exit(0);
 };
 
-/**
- * @returns Next job, or null if there is no job yet.
- */
-const fetchNextJob = async (): Promise<null | ReservedJob> => {
-    const response = await api('/jobs/next', { types: jobTypes }, stopController.signal);
-
-    if (204 === response.status) {
-        return null;
-    }
-
-    if (!response.ok) {
-        throw new Error(`Server responded ${response.status}: ${await response.text()}`);
-    }
-
-    return typia.assert<ReservedJob>(await response.json());
-};
-
-/**
- * Sends heartbeats while job is processing.
- * Calls onNotOwned if server says job has been given to another worker.
- */
-const startHeartbeats = (reservedJob: ReservedJob, onNotOwned: () => void): () => void => {
-    const interval = setInterval(() => {
-        api(`/jobs/${reservedJob.jobId}/heartbeat`, { token: reservedJob.token })
-            .catch(e => {
-                if (e instanceof JobNotOwnedError) {
-                    onNotOwned();
-                    return;
-                }
-
-                logger.warning('Could not send heartbeat', { jobId: reservedJob.jobId, message: e.message });
-            })
-        ;
-    }, HEARTBEAT_MS);
-
-    return () => clearInterval(interval);
-};
-
 const processJob = async (engineWorker: EngineWorker, reservedJob: ReservedJob): Promise<void> => {
-    const { jobId, token, task } = reservedJob;
-    let abandoned = false;
+    const { jobId, task } = reservedJob;
 
     logger.info('Processing job', { jobId, type: task.type });
 
-    const stopHeartbeats = startHeartbeats(reservedJob, () => {
-        logger.notice('Job has been given to another worker, abandoning it', { jobId });
-        abandoned = true;
+    const outcome = await client.processJob(reservedJob, task => engineWorker.process(task), {
+        // Engine crashed or timed out: another worker may process it. Else task itself is not processable.
+        isRetryable: error => error instanceof GTPEngineError,
+        onHeartbeatError: error => logger.warning('Could not send heartbeat', { jobId, message: error.message }),
     });
 
-    let path: string;
-    let body: object;
-
-    try {
-        const result = await engineWorker.process(task);
-
-        path = `/jobs/${jobId}/result`;
-        body = { token, result };
-    } catch (e) {
-        const error = e instanceof Error ? e : new Error(String(e));
-
-        // Engine crashed or timed out: another worker may process it. Else task itself is not processable.
-        const retryable = error instanceof GTPEngineError;
-
-        logger.error('Error while processing job', { jobId, type: task.type, message: error.message, retryable });
-
-        path = `/jobs/${jobId}/fail`;
-        body = { token, error: error.message.substring(0, 1000), retryable };
-    } finally {
-        stopHeartbeats();
-    }
-
-    if (abandoned) {
-        return;
-    }
-
-    try {
-        const response = await api(path, body);
-
-        if (!response.ok) {
-            logger.error('Server refused job result', { jobId, status: response.status, message: await response.text() });
+    switch (outcome.status) {
+        case 'abandoned':
+            logger.notice('Job has been given to another worker, abandoning it', { jobId });
             return;
-        }
 
-        logger.info('Job done', { jobId });
-    } catch (e) {
-        if (e instanceof JobNotOwnedError) {
-            logger.notice('Job has been given to another worker, result ignored', { jobId });
+        case 'refused':
+            logger.error('Server refused job result', { jobId, status: outcome.httpStatus, message: outcome.message });
             return;
-        }
 
-        throw e;
+        case 'done':
+            if (outcome.error) {
+                logger.error('Error while processing job', { jobId, type: task.type, message: outcome.error.message, retryable: outcome.error instanceof GTPEngineError });
+            }
+
+            logger.info('Job done', { jobId });
     }
 };
 
@@ -210,7 +115,7 @@ const run = async (engineWorker: EngineWorker): Promise<void> => {
 
     while (!stopping) {
         try {
-            currentJob = await fetchNextJob();
+            currentJob = await client.next(jobTypes, { signal: stopController.signal });
 
             if (disconnected) {
                 disconnected = false;
@@ -272,7 +177,7 @@ const onStopSignal = (): void => {
 
     logger.info('Giving back current job to server...');
 
-    api(`/jobs/${job.jobId}/fail`, { token: job.token, error: 'Worker stopped', retryable: true })
+    client.fail(job, 'Worker stopped', true)
         .catch(e => logger.warning('Could not give back job', { message: e.message }))
         .finally(() => disconnectAndExit())
     ;

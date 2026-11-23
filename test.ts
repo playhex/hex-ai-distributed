@@ -1,8 +1,9 @@
 import './config';
-import { analyzeGame } from './src/worker/task/analyze-game';
+import { analyzeGame } from './src/worker/task/intuition/analyze-game';
 import { analyzeMoveMcts } from './src/worker/task/mcts/mcts-analyze-move';
 import { analyzePositionMcts } from './src/worker/task/mcts/mcts-analyze-position';
 import { processJobKatahexMcts } from './src/worker/task/mcts/mcts-move';
+import { katahex } from './src/worker/task/calculate-move/katahex';
 
 /*
  * For testing while development.
@@ -24,10 +25,10 @@ import { processJobKatahexMcts } from './src/worker/task/mcts/mcts-move';
         size: 14,
     };
 
-    console.log('intuition game', await analyzeGame({ size: 14, movesHistory: `${analyzeMoveInput.movesHistory} ${analyzeMoveInput.move}` }));
-    console.log('mcts', await analyzeMoveMcts({ ...analyzeMoveInput, maxPlayouts: 400 }));
+    console.log('intuition game', await analyzeGame(katahex, { size: 14, movesHistory: `${analyzeMoveInput.movesHistory} ${analyzeMoveInput.move}` }));
+    console.log('mcts', await analyzeMoveMcts(katahex, { ...analyzeMoveInput, maxPlayouts: 400 }));
 
-    console.log('mcts position', await analyzePositionMcts({
+    console.log('mcts position', await analyzePositionMcts(katahex, {
         size: 13,
         color: 'white',
         black: 'c2 b5 b8 k10 j11',
@@ -35,7 +36,7 @@ import { processJobKatahexMcts } from './src/worker/task/mcts/mcts-move';
         maxPlayouts: 400,
     }));
 
-    console.log('mcts move', await processJobKatahexMcts({
+    console.log('mcts move', await processJobKatahexMcts(katahex, {
         game: {
             size: 13,
             movesHistory: 'c2 d11 b5 k4 b8 e10 k10 k11 j11',

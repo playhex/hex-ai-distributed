@@ -42,9 +42,10 @@ const notSupported = (engine: Engine, task: AiTask): never => {
 export const loadEngineWorker = async (engine: Engine): Promise<EngineWorker> => {
     switch (engine) {
         case 'katahex': {
-            const { katahex, processJobKatahex } = await import('./task/calculate-move/katahex');
-            const { analyzeGame } = await import('./task/analyze-game');
-            const { analyzePosition } = await import('./task/analyze-position');
+            const { katahex } = await import('./task/calculate-move/katahex');
+            const { processJobKatahex } = await import('./task/intuition/intuition-move');
+            const { analyzeGame } = await import('./task/intuition/analyze-game');
+            const { analyzePosition } = await import('./task/intuition/analyze-position');
             const { processJobKatahexMcts } = await import('./task/mcts/mcts-move');
             const { analyzeMoveMcts } = await import('./task/mcts/mcts-analyze-move');
             const { analyzePositionMcts } = await import('./task/mcts/mcts-analyze-position');
@@ -59,12 +60,12 @@ export const loadEngineWorker = async (engine: Engine): Promise<EngineWorker> =>
                 unavailableJobTypes,
                 process: async task => {
                     switch (task.type) {
-                        case 'katahex-intuition-move': return await processJobKatahex(task.data);
-                        case 'katahex-mcts-move': return await processJobKatahexMcts(task.data);
-                        case 'katahex-intuition-analyze-game': return await analyzeGame(task.data);
-                        case 'katahex-mcts-analyze-move': return await analyzeMoveMcts(task.data);
-                        case 'katahex-intuition-analyze-position': return await analyzePosition(task.data);
-                        case 'katahex-mcts-analyze-position': return await analyzePositionMcts(task.data);
+                        case 'katahex-intuition-move': return await processJobKatahex(katahex, task.data);
+                        case 'katahex-mcts-move': return await processJobKatahexMcts(katahex, task.data);
+                        case 'katahex-intuition-analyze-game': return await analyzeGame(katahex, task.data);
+                        case 'katahex-mcts-analyze-move': return await analyzeMoveMcts(katahex, task.data);
+                        case 'katahex-intuition-analyze-position': return await analyzePosition(katahex, task.data);
+                        case 'katahex-mcts-analyze-position': return await analyzePositionMcts(katahex, task.data);
                     }
 
                     return notSupported(engine, task);

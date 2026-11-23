@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Job durations · PlayHex AI worker</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%237b1fff' d='M8 .5 14.5 4.25v7.5L8 15.5 1.5 11.75v-7.5z'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+    <main class="stats-page">
+        <a class="back" href="./">← AI worker</a>
+        <h1>Job durations</h1>
+        <p class="stats-intro">Jobs completed in this browser, by board size. Each dot is a job, the line is the median.</p>
+
+        <div id="charts"></div>
+
+        <section id="summary-section">
+            <h2>Summary</h2>
+            <table class="summary">
+                <thead>
+                    <tr><th>Job</th><th>Board</th><th>Jobs</th><th>Median</th><th>Mean</th><th>Max</th></tr>
+                </thead>
+                <tbody id="summary"></tbody>
+            </table>
+        </section>
+
+        <section class="bench">
+            <h2>Benchmark</h2>
+            <p class="stats-intro">
+                One job of each type on 11×11 and 14×14, same positions on every computer, tree search with 400 playouts.
+                Stop the worker before running, as they share the GPU.
+            </p>
+            <div class="bench-actions">
+                <button id="bench-run" class="button" type="button">Run benchmark</button>
+                <span id="bench-status" class="bench-status"></span>
+            </div>
+            <table class="summary bench-table">
+                <thead>
+                    <tr><th>Job</th><th>Board</th><th>Duration</th><th>Visits/s</th></tr>
+                </thead>
+                <tbody id="bench"></tbody>
+            </table>
+
+            <table class="summary bench-table bench-model">
+                <thead>
+                    <tr><th>Model run, 11×11</th><th>Batch</th><th>Duration</th><th>Positions/s</th></tr>
+                </thead>
+                <tbody id="bench-model"></tbody>
+            </table>
+
+            <div id="bench-debug" class="debug bench-debug"></div>
+        </section>
+
+        <div id="tooltip" class="tooltip" hidden></div>
+    </main>
+
+    <script type="module" src="./src/statsPage.ts"></script>
+</body>
+</html>

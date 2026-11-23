@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>Custom kernels · PlayHex AI worker</title>
+    <link rel="stylesheet" href="./src/style.css">
+</head>
+<body>
+    <main class="stats-page">
+        <a class="back" href="./stats.html">← Stats</a>
+        <h1>Custom kernels</h1>
+        <p class="stats-intro">
+            Dev only, models from <code>model-conversion/out/</code>.
+            Chain of 10 residual blocks, 192 channels, random weights: onnxruntime vs custom WebGPU kernels. Max diff is relative to onnxruntime output.
+            Stop the worker before running, as they share the GPU.
+        </p>
+        <div class="bench-actions">
+            <button id="run" class="button" type="button">Run</button>
+            <span id="status" class="bench-status"></span>
+        </div>
+        <table class="summary bench-table">
+            <thead>
+                <tr><th>Implementation</th><th>Board</th><th>Batch</th><th>Duration</th><th>GFLOP/s</th><th>Max diff</th></tr>
+            </thead>
+            <tbody id="results"></tbody>
+        </table>
+        <pre id="log" class="debug"></pre>
+    </main>
+
+    <script type="module" src="./src/kernels.ts"></script>
+</body>
+</html>

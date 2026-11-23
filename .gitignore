@@ -5,3 +5,8 @@ node_modules/
 yarn-error.log
 /katahex/*.bin.gz
 /gtp_logs
+/model-conversion/.deps/
+/model-conversion/out/
+/web/node_modules/
+/web/gtp_logs/
+__pycache__/

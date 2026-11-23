@@ -5,3 +5,6 @@ default.log
 .env
 .git
 docs
+model-conversion
+web
+mcts

@@ -1,0 +1,24 @@
+{
+  "name": "hex-ai-web-worker",
+  "private": true,
+  "description": "PlayHex AI worker running katahex tree search in the browser. Built to ../docs for GitHub Pages.",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build:playhex": "tsc --noEmit && vite build --mode playhex.prod",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "onnxruntime-web": "1.31.1"
+  },
+  "devDependencies": {
+    "@types/node": "22",
+    "bootstrap-icons": "1.13.1",
+    "onnxruntime-node": "1.31.1",
+    "typescript": "5.9.3",
+    "vite": "6.4.5",
+    "vitest": "3.2.7"
+  }
+}

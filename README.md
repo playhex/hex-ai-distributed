@@ -138,6 +138,11 @@ and for multiple GPUs `numNNServerThreadsPerModel` and `gpuToUseThread*`.
 Game analyzes (`katahex-intuition-analyze-game`) require a Katahex build with the `kata-raw-nn-batch` command, from the [playhex fork](https://github.com/playhex/katahex).
 With an older build, the worker logs a warning and does not process them.
 
+## Contribute from a browser
+
+No docker: open https://playhex.github.io/hex-ai-distributed/, log in with PlayHex, and press play.
+It runs Katahex jobs on your GPU with WebGPU. See [web/README.md](web/README.md).
+
 ## Development
 
 Requires Node 22.

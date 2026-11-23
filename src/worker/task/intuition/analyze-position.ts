@@ -1,8 +1,8 @@
-import { AnalyzePositionInput, AnalyzePositionOutput } from '../../shared/protocol';
-import { katahex } from './calculate-move/katahex';
-import { StandardizedPosition } from '../../shared/StandardizedPosition';
+import { AnalyzePositionInput, AnalyzePositionOutput } from '../../../shared/protocol';
+import { StandardizedPosition } from '../../../shared/StandardizedPosition';
+import { RawNnEngine } from './RawNnEngine';
 
-export const analyzePosition = async (input: AnalyzePositionInput): Promise<AnalyzePositionOutput> => {
+export const analyzePosition = async (katahex: RawNnEngine, input: AnalyzePositionInput): Promise<AnalyzePositionOutput> => {
     const standardizedPosition = new StandardizedPosition();
     standardizedPosition.blackCells = input.black.length > 0 ? input.black.split(' ') : [];
     standardizedPosition.whiteCells = input.white.length > 0 ? input.white.split(' ') : [];

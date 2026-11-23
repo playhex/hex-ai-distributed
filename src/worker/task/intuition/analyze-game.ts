@@ -1,8 +1,8 @@
-import { AnalyzeGameInput, AnalyzeGameOutput, AnalyzeMoveOutput, MoveAndValue } from '../../shared/protocol';
-import { katahex } from './calculate-move/katahex';
-import { mirrorMoveAndValue, mirrorMoveAndValues, takeKataRawMove, takeKataRawNBestMoves } from '../../shared/utils';
-import Move from '../../shared/Move';
-import { StandardizedPosition } from '../../shared/StandardizedPosition';
+import { AnalyzeGameInput, AnalyzeGameOutput, AnalyzeMoveOutput, MoveAndValue } from '../../../shared/protocol';
+import { mirrorMoveAndValue, mirrorMoveAndValues, takeKataRawMove, takeKataRawNBestMoves } from '../../../shared/utils';
+import Move from '../../../shared/Move';
+import { StandardizedPosition } from '../../../shared/StandardizedPosition';
+import { RawNnEngine } from './RawNnEngine';
 
 const BEST_MOVES_COUNT = 4;
 
@@ -49,7 +49,7 @@ type MoveAnalyze = {
  * Swap move, as second move, is not analyzed: server deduces it from third move analyze.
  * Same order as server splitToAnalyzeMoveInputs().
  */
-export const analyzeGame = async (input: AnalyzeGameInput): Promise<AnalyzeGameOutput> => {
+export const analyzeGame = async (katahex: RawNnEngine, input: AnalyzeGameInput): Promise<AnalyzeGameOutput> => {
     const moves = input.movesHistory.split(' ').filter(move => '' !== move);
 
     const moveAnalyzes: MoveAnalyze[] = moves

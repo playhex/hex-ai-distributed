@@ -1,53 +1,12 @@
 import { StandardizedPosition } from '../../shared/StandardizedPosition';
-import { takeKataRawGoodMoves } from '../../shared/utils';
 import GTPClient from '../GTPClient';
 import { KatahexCommand } from './types';
+import { isPass, MctsEngine, SearchMove, SearchOutput } from '../task/mcts/MctsEngine';
+import { RawNnEngine, RawNNOutput } from '../task/intuition/RawNnEngine';
 
-/**
- * Intuition bot plays randomly one of the moves
- * having policy > INTUITION_MOVE_POLICY_RATIO * best policy,
- * so that it does not always play same games.
- */
-export const INTUITION_MOVE_POLICY_RATIO = 0.8;
+export { isPass, type SearchMove, type SearchOutput, type RawNNOutput };
 
-export type RawNNOutput = {
-    values: number[][];
-    whiteWin: number;
-};
-
-export type SearchMove = {
-    move: string;
-    visits: number;
-
-    /**
-     * Win rate of player to play after this move.
-     */
-    winrate: number;
-
-    /**
-     * Raw neural network policy of this move.
-     */
-    prior: number;
-
-    /**
-     * Rank of this move, 0 for best move.
-     */
-    order: number;
-};
-
-export type SearchOutput = {
-    /**
-     * Searched moves, best move first. Pass excluded.
-     */
-    moves: SearchMove[];
-
-    /**
-     * Move chosen by katahex, can be pass ("pss").
-     */
-    played: string;
-};
-
-export default class Katahex
+export default class Katahex implements MctsEngine, RawNnEngine
 {
     private gtpClient: GTPClient<KatahexCommand>;
 
@@ -248,24 +207,6 @@ export default class Katahex
     }
 
     /**
-     * Only use raw neural network output to get a move from its intuition.
-     * Don't make any tree searching.
-     * Returns a random move for black among the best ones,
-     * see INTUITION_MOVE_POLICY_RATIO.
-     */
-    async getMoveFromNeuralNetworkOutput(symmetry: number = 0): Promise<string>
-    {
-        const rawNNOutput = await this.parseRawNn(symmetry);
-        const goodMoves = takeKataRawGoodMoves(rawNNOutput.values, INTUITION_MOVE_POLICY_RATIO);
-
-        if (0 === goodMoves.length) {
-            throw new Error('Did not found best move');
-        }
-
-        return goodMoves[Math.floor(Math.random() * goodMoves.length)].move.toString();
-    }
-
-    /**
      * Whether this katahex build supports a command, i.e kata-raw-nn-batch, which is not in older builds.
      */
     async supportsCommand(command: KatahexCommand): Promise<boolean>
@@ -322,11 +263,6 @@ const parseRawNnBlock = (lines: string[]): RawNNOutput => {
         whiteWin: globalValues['whiteWin'],
     };
 };
-
-/**
- * Katahex returns "pss" for pass.
- */
-export const isPass = (move: string): boolean => /^pa?ss$/.test(move);
 
 /**
  * Parse a move from analyze output, like:

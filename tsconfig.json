@@ -97,5 +97,7 @@
       }
     ],
     "strictNullChecks": true
-  }
+  },
+  // Node worker only, web/ and mcts/ are built with web/tsconfig.json
+  "include": ["src", "config.ts", "test.ts"]
 }

@@ -1,13 +1,13 @@
 import { AnalyzePositionOutput, MctsAnalyzePositionInput } from '../../../shared/protocol';
 import Move from '../../../shared/Move';
 import { StandardizedPosition } from '../../../shared/StandardizedPosition';
-import { katahex } from '../calculate-move/katahex';
+import { MctsEngine } from './MctsEngine';
 
 /**
  * Analyze position with tree search, limited by maxPlayouts.
  * Returns share of visits of each cell as policy.
  */
-export const analyzePositionMcts = async (input: MctsAnalyzePositionInput): Promise<AnalyzePositionOutput> => {
+export const analyzePositionMcts = async (katahex: MctsEngine, input: MctsAnalyzePositionInput): Promise<AnalyzePositionOutput> => {
     const standardizedPosition = new StandardizedPosition();
     standardizedPosition.blackCells = input.black.length > 0 ? input.black.split(' ') : [];
     standardizedPosition.whiteCells = input.white.length > 0 ? input.white.split(' ') : [];
