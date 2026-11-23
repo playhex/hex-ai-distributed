@@ -23,6 +23,30 @@ class UniformEvaluator implements Evaluator
 }
 
 /**
+ * Like a trained network: almost all policy on a winning move, if any.
+ */
+class ConfidentEvaluator implements Evaluator
+{
+    async evaluate(requests: EvaluationRequest[]): Promise<Evaluation[]>
+    {
+        return requests.map(({ board, player, moves }) => {
+            const winning = moves.findIndex(move => {
+                const after = board.clone();
+                after.play(move, player);
+                return after.isConnected(player);
+            });
+            const policy = new Float32Array(moves.length).fill(winning < 0 ? 1 / moves.length : 0.001 / moves.length);
+
+            if (winning >= 0) {
+                policy[winning] = 0.999;
+            }
+
+            return { policy, win: winning < 0 ? 0.5 : 0.99, utility: winning < 0 ? 0 : 0.98 };
+        });
+    }
+}
+
+/**
  * Black column x = 3, rows 0 to 4 of a 7x7 board: several moves connect.
  */
 const almostWonBoard = (): HexBoard => {
@@ -45,7 +69,8 @@ describe('Search', () => {
 
         expect(after.isConnected(BLACK)).toBe(true);
         expect(result.moves[0].winrate).toBe(1);
-        expect(result.winrate).toBeGreaterThan(0.8);
+        // Uniform policy also explores other moves, with even utility
+        expect(result.winrate).toBeGreaterThan(0.5);
     });
 
     it('blocks when opponent threatens to win', async () => {
@@ -73,6 +98,13 @@ describe('Search', () => {
         expect(visits).toBe(100);
         expect(evaluator.evaluated).toBeLessThanOrEqual(101);
     });
+
+    it('counts visits of terminal positions as playouts, so that search ends when win is found', async () => {
+        const result = await new Search(new ConfidentEvaluator(), almostWonBoard(), BLACK).run({ maxPlayouts: 400 });
+
+        expect(result.playouts).toBe(400);
+        expect(result.moves[0].winrate).toBe(1);
+    }, 5000);
 
     it('stops when aborted', async () => {
         const controller = new AbortController();

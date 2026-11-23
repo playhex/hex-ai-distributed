@@ -172,9 +172,14 @@ export class Search
             while (playouts < maxPlayouts && (root.moves?.length ?? 0) > 0) {
                 signal?.throwIfAborted();
 
-                const leaves = this.selectLeaves(Math.min(this.params.batchSize, maxPlayouts - playouts), pending);
+                const { leaves, terminals } = this.selectLeaves(Math.min(this.params.batchSize, maxPlayouts - playouts), pending);
 
-                playouts += leaves.length;
+                playouts += leaves.length + terminals;
+
+                if (terminals > 0) {
+                    done += terminals;
+                    onProgress?.(done);
+                }
 
                 if (leaves.length > 0) {
                     inFlight.push(this.evaluateAndBackup(leaves).then(() => {
@@ -201,17 +206,20 @@ export class Search
 
     /**
      * Selects leaves to evaluate, applying virtual losses so that each one is different.
-     * Terminal leaves are backed up directly.
+     * Terminal leaves are backed up directly, and counted as playouts like katahex:
+     * else search would never end once a win is found.
      */
-    private selectLeaves(count: number, pending: Set<Node>): Leaf[]
+    private selectLeaves(count: number, pending: Set<Node>): { leaves: Leaf[], terminals: number }
     {
         const leaves: Leaf[] = [];
+        let terminals = 0;
 
         for (let i = 0; i < count; ++i) {
             const leaf = this.descend();
 
             if (leaf.path[leaf.path.length - 1].terminalUtility !== null) {
                 this.backup(leaf.path, leaf.path[leaf.path.length - 1].terminalUtility!);
+                ++terminals;
                 continue;
             }
 
@@ -227,7 +235,7 @@ export class Search
             leaves.push(leaf);
         }
 
-        return leaves;
+        return { leaves, terminals };
     }
 
     private descend(): Leaf
