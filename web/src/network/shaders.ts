@@ -28,6 +28,12 @@ fn act(x: ${type}) -> ${type} {
 
 const range = (n: number): number[] => [...Array(n).keys()];
 
+// Each loader writes its own scalar slot in As. Gather vectors after the workgroup barrier.
+export const loadATileRows = (tm: number): string => range(tm / 4).flatMap(r => [
+    `let aBase${r} = kk * AS + lid.y * ${tm}u + ${4 * r}u;`,
+    `let a${r} = vec4f(As[aBase${r}], As[aBase${r} + 1u], As[aBase${r} + 2u], As[aBase${r} + 3u]);`,
+]).join('\n            ');
+
 export type ConvOptions = {
     kernel: 1 | 3,
     ic: number,
@@ -104,7 +110,7 @@ const WGX = ${wgx}u;
 const THREADS = ${wgx * wgy}u;
 
 // As: k major, positions contiguous, padded against bank conflicts on store
-var<workgroup> As: array<vec4f, ${bk * as / 4}>;
+var<workgroup> As: array<f32, ${bk * as}>;
 var<workgroup> Bs: array<vec4f, ${bk * bn / 4}>;
 ${activation(act, 'vec4f')}
 
@@ -136,7 +142,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(workgroup_id) wid: ve
             }
             for (var c = 0u; c < 4u; c++) {
                 let flat = (4u * kq + c) * AS + mm;
-                As[flat / 4u][flat % 4u] = v[c];
+                As[flat] = v[c];
             }
         }
 
@@ -149,7 +155,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(workgroup_id) wid: ve
         workgroupBarrier();
 
         for (var kk = 0u; kk < BK; kk++) {
-            ${range(tm / 4).map(r => `let a${r} = As[(kk * AS + lid.y * ${tm}u) / 4u + ${r}u];`).join('\n            ')}
+            ${loadATileRows(tm)}
             ${quads.map(q => `let b${q} = Bs[(kk * BN + lid.x * ${tn}u) / 4u + ${q}u];`).join('\n            ')}
             ${range(tm).flatMap(i => quads.map(q => `acc${i}_${q} = fma(vec4f(a${Math.floor(i / 4)}[${i % 4}]), b${q}, acc${i}_${q});`)).join('\n            ')}
         }
@@ -344,7 +350,7 @@ const AS = ${as}u;
 const WGX = ${wgx}u;
 const THREADS = ${wgx * wgy}u;
 
-var<workgroup> As: array<vec4f, ${bk * as / 4}>;
+var<workgroup> As: array<f32, ${bk * as}>;
 var<workgroup> Bs: array<vec4f, ${bk * bn / 4}>;
 
 @compute @workgroup_size(${wgx}, ${wgy})
@@ -367,7 +373,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(workgroup_id) wid: ve
             }
             for (var j = 0u; j < 4u; j++) {
                 let flat = (4u * kq + j) * AS + mm;
-                As[flat / 4u][flat % 4u] = v[j];
+                As[flat] = v[j];
             }
         }
 
@@ -380,7 +386,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(workgroup_id) wid: ve
         workgroupBarrier();
 
         for (var kk = 0u; kk < BK; kk++) {
-            ${range(tm / 4).map(r => `let a${r} = As[(kk * AS + lid.y * ${tm}u) / 4u + ${r}u];`).join('\n            ')}
+            ${loadATileRows(tm)}
             ${quads.map(q => `let b${q} = Bs[(kk * BN + lid.x * ${tn}u) / 4u + ${q}u];`).join('\n            ')}
             ${range(tm).flatMap(i => quads.map(q => `acc${i}_${q} = fma(vec4f(a${Math.floor(i / 4)}[${i % 4}]), b${q}, acc${i}_${q});`)).join('\n            ')}
         }
